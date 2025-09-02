@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -63,6 +65,9 @@ public class FlashSaleEvent extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "skuId", insertable = false, updatable = false)
     private Sku sku;
+
+    @OneToMany(mappedBy = "flashSale", fetch = FetchType.LAZY)
+    private List<Order> orders = new ArrayList<>();
 
     // Constructors
     public FlashSaleEvent() {}
@@ -209,6 +214,14 @@ public class FlashSaleEvent extends BaseEntity {
 
     public void setSku(Sku sku) {
         this.sku = sku;
+    }
+
+    public List<Order> getOrders() {
+        return orders;
+    }
+
+    public void setOrders(List<Order> orders) {
+        this.orders = orders;
     }
 
     @Override

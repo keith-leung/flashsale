@@ -37,6 +37,7 @@ public class FlashSaleEvent : BaseEntity
     // Navigation properties
     [ForeignKey(nameof(SkuId))]
     public virtual Sku Sku { get; set; } = null!;
+    public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
     
     // Calculated properties
     [NotMapped]

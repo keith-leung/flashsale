@@ -32,5 +32,20 @@ public class MappingProfile : Profile
         CreateMap<InventoryUpdateDto, Inventory>()
             .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
         CreateMap<Inventory, InventoryResponseDto>();
+
+        // Order mappings
+        CreateMap<OrderCreateDto, Order>()
+            .ForMember(dest => dest.LineItems, opt => opt.Ignore());
+        CreateMap<OrderUpdateDto, Order>()
+            .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
+        CreateMap<Order, OrderResponseDto>();
+
+        // Order Line Item mappings
+        CreateMap<OrderLineItemCreateDto, OrderLineItem>();
+        CreateMap<OrderLineItem, OrderLineItemResponseDto>();
+
+        // Payment mappings
+        CreateMap<PaymentCreateDto, Payment>();
+        CreateMap<Payment, PaymentResponseDto>();
     }
 }

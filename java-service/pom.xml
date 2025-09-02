@@ -9,10 +9,10 @@
         <relativePath/>
     </parent>
     <groupId>com.flashsale</groupId>
-    <artifactId>flashsale-service</artifactId>
-    <version>1.0.0</version>
-    <name>flashsale-service</name>
-    <description>Flash Sale Microservice for Spring Boot</description>
+    <artifactId>flashsale-api</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>flashsale-api</name>
+    <description>Flash Sale Microservice API</description>
     <properties>
         <java.version>21</java.version>
         <spring-cloud.version>2023.0.0</spring-cloud.version>

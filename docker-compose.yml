@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Database - MySQL 8+ with InnoDB for optimal flash sale performance
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: flashsale_db
+      MYSQL_USER: flashsale_user
+      MYSQL_PASSWORD: flashsale_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./shared-schema.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-storage-engine=InnoDB --innodb-flush-log-at-trx-commit=2 --innodb-buffer-pool-size=256M --max-connections=1000
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "flashsale_user", "-pflashsale_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Python Service
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://flashsale_user:flashsale_password@mysql:3306/flashsale_db
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./python-service:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # C# Service  
+  csharp-service:
+    build:
+      context: ./csharp-service
+      dockerfile: Dockerfile
+    ports:
+      - "7001:80"
+    environment:
+      ConnectionStrings__DefaultConnection: Server=mysql;Port=3306;Database=flashsale_db;User=flashsale_user;Password=flashsale_password;
+      ConnectionStrings__Redis: redis:6379
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Java Service
+  java-service:
+    build:
+      context: ./java-service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/flashsale_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: flashsale_user
+      SPRING_DATASOURCE_PASSWORD: flashsale_password
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  redis_data:

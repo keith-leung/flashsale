@@ -51,7 +51,7 @@ public class OrderController {
     })
     public ResponseEntity<OrderResponseDto> getOrderById(
             @Parameter(description = "Order ID")
-            @PathVariable Long id) {
+            @PathVariable UUID id) {
         
         return orderService.getOrderById(id)
                 .map(order -> ResponseEntity.ok(order))
@@ -85,7 +85,7 @@ public class OrderController {
     })
     public ResponseEntity<OrderResponseDto> updateOrderStatus(
             @Parameter(description = "Order ID")
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Parameter(description = "New status")
             @RequestBody String status) {
         
@@ -99,23 +99,36 @@ public class OrderController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Cancel order", description = "Cancel an order")
+    @Operation(summary = "Cancel order", description = "Cancel an existing order")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "204", description = "Successfully cancelled order"),
-        @ApiResponse(responseCode = "404", description = "Order not found"),
-        @ApiResponse(responseCode = "400", description = "Order cannot be cancelled")
+        @ApiResponse(responseCode = "204", description = "Order cancelled successfully"),
+        @ApiResponse(responseCode = "404", description = "Order not found")
     })
     public ResponseEntity<Void> cancelOrder(
             @Parameter(description = "Order ID")
-            @PathVariable Long id) {
+            @PathVariable UUID id) {
+        
+        boolean cancelled = orderService.cancelOrder(id);
+        return cancelled ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    }
+
+    @PostMapping("/{orderId}/payments")
+    @Operation(summary = "Create payment", description = "Create a payment for an order")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Payment created successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid payment data"),
+        @ApiResponse(responseCode = "404", description = "Order not found")
+    })
+    public ResponseEntity<PaymentResponseDto> createPayment(
+            @Parameter(description = "Order ID")
+            @PathVariable UUID orderId,
+            @Parameter(description = "Payment data")
+            @Valid @RequestBody PaymentCreateDto dto) {
         
         try {
-            if (orderService.cancelOrder(id)) {
-                return ResponseEntity.noContent().build();
-            } else {
-                return ResponseEntity.notFound().build();
-            }
-        } catch (IllegalStateException e) {
+            PaymentResponseDto payment = orderService.createPayment(orderId, dto);
+            return ResponseEntity.status(HttpStatus.CREATED).body(payment);
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
     }

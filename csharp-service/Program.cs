@@ -23,7 +23,8 @@ builder.Services.AddSwaggerGen(c =>
 
 // Database
 builder.Services.AddDbContext<FlashSaleDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        new MySqlServerVersion(new Version(8, 0))));
 
 // Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
@@ -40,6 +41,7 @@ builder.Services.AddScoped<ISpuService, SpuService>();
 builder.Services.AddScoped<ISkuService, SkuService>();
 builder.Services.AddScoped<IFlashSaleService, FlashSaleService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 
 // Background Services
 builder.Services.AddHostedService<FlashSaleStatusUpdateService>();

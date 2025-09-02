@@ -36,5 +36,5 @@ async def create_tables():
     """Create database tables."""
     async with engine.begin() as conn:
         # Import models here to register them
-        from app.models import spu, sku, flash_sale, inventory  # noqa
+        from app.models import spu, sku, flash_sale, inventory, order  # noqa
         await conn.run_sync(Base.metadata.create_all)

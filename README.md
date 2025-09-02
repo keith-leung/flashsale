@@ -6,9 +6,9 @@ A **complete flash sale e-commerce platform** with identical functionality imple
 
 This project provides **three independent microservices** implementing flash sale functionality:
 
-1. **Python Service** - FastAPI + SQLAlchemy + MySQL + Redis
-2. **C# Service** - ASP.NET Core + Entity Framework Core + MySQL + Redis  
-3. **Java Service** - Spring Boot + JPA + MySQL + Redis
+1. **Python Service** - FastAPI + SQLAlchemy + MySQL 8+ (InnoDB) + Redis
+2. **C# Service** - ASP.NET Core + Entity Framework Core + MySQL 8+ (InnoDB) + Redis  
+3. **Java Service** - Spring Boot + JPA + MySQL 8+ (InnoDB) + Redis
 
 ## Core Features
 
@@ -66,7 +66,7 @@ All three services implement the same core functionality:
 | **Language** | Python 3.11+ | C# .NET 8 | Java 21+ |
 | **Web Framework** | FastAPI | ASP.NET Core | Spring Boot 3.2 |
 | **ORM** | SQLAlchemy | Entity Framework Core | Spring Data JPA |
-| **Database** | PostgreSQL | PostgreSQL | PostgreSQL |
+| **Database** | MySQL 8+ (InnoDB) | MySQL 8+ (InnoDB) | MySQL 8+ (InnoDB) |
 | **Caching** | Redis | Redis | Redis |
 | **Documentation** | OpenAPI/Swagger | Swagger | SpringDoc OpenAPI |
 | **Background Tasks** | Celery | Hosted Services | @Scheduled |
@@ -74,9 +74,33 @@ All three services implement the same core functionality:
 
 ## Quick Start
 
-Each service can be run independently:
+### Docker Setup (Recommended for Flash Sale Testing)
 
-### Python Service
+```bash
+# Start all services with optimized MySQL 8+ InnoDB configuration
+docker-compose up -d
+
+# This starts:
+# - MySQL 8+ with InnoDB performance optimizations (port 3306)
+# - Redis cache (port 6379)
+# - Python service (port 8000) 
+# - C# service (port 7001)
+# - Java service (port 8080)
+
+# Verify services are running
+docker-compose ps
+
+# Test API endpoints
+curl http://localhost:8000/docs      # Python FastAPI docs
+curl https://localhost:7001/swagger  # C# Swagger docs  
+curl http://localhost:8080/swagger-ui.html # Java Swagger docs
+```
+
+### Individual Services (Development Mode)
+
+Each service can also be run independently:
+
+#### Python Service
 ```bash
 cd python-service
 poetry install
@@ -84,7 +108,7 @@ poetry run uvicorn app.main:app --reload
 # API: http://localhost:8000/docs
 ```
 
-### C# Service
+#### C# Service
 ```bash
 cd csharp-service
 dotnet restore
@@ -92,7 +116,7 @@ dotnet run
 # API: https://localhost:7001/swagger
 ```
 
-### Java Service
+#### Java Service
 ```bash
 cd java-service
 mvn clean compile
@@ -113,7 +137,7 @@ All services implement the same logical data model:
 - **Order Line Items**: Individual items within orders
 - **Payments**: Payment transaction records
 
-**All IDs**: Twitter Snowflake format (64-bit) for distributed generation
+**All IDs**: UUID format (CHAR(36)) for distributed generation and cross-service compatibility
 
 ## API Endpoints
 
@@ -174,10 +198,109 @@ Flash sales automatically transition through states:
 **C#/ASP.NET Core**: Enterprise-grade performance, excellent tooling, strong typing system
 **Java/Spring Boot**: Battle-tested ecosystem, excellent for complex business logic, comprehensive features
 
+### Why MySQL 8+ with InnoDB for Flash Sales?
+
+**MySQL 8+ with InnoDB** is specifically chosen for optimal flash sale performance:
+- **Row-level locking**: Prevents overselling with minimal contention during high concurrency
+- **MVCC (Multi-Version Concurrency Control)**: Allows multiple reads while writes are happening
+- **ACID compliance**: Ensures data integrity during flash sale inventory updates
+- **Performance optimizations**: Optimized buffer pool, redo log settings for high-throughput scenarios
+- **Proven at scale**: Battle-tested for e-commerce workloads and flash sale scenarios
+
 ### Common Infrastructure
-- **MySQL 8+**: ACID compliance with InnoDB engine, excellent performance for transactional workloads
-- **Redis**: High-performance caching and session storage
-- **Twitter Snowflake IDs**: Distributed ID generation for zero conflicts
+- **MySQL 8+ with InnoDB**: Optimized for flash sale performance with row-level locking, ACID compliance, and excellent concurrency handling for high-traffic scenarios. InnoDB's MVCC (Multi-Version Concurrency Control) prevents overselling in flash sale scenarios
+- **Redis**: High-performance caching and session storage for rapid data access
+- **UUID Generation**: Distributed UUID generation for zero conflicts across services
+
+## MySQL 8+ Performance Configuration
+
+The Docker setup includes MySQL performance optimizations specifically for flash sales:
+
+```yaml
+command: --default-storage-engine=InnoDB 
+         --innodb-flush-log-at-trx-commit=2 
+         --innodb-buffer-pool-size=256M 
+         --max-connections=1000
+```
+
+**Key optimizations:**
+- **InnoDB Storage Engine**: Row-level locking for minimal contention
+- **Buffer Pool**: 256MB for optimal caching of hot flash sale data
+- **Redo Log**: Relaxed durability (`=2`) for better write performance
+- **Connections**: 1000 max connections for high concurrent flash sale traffic
+
+## Testing Flash Sale Functionality
+
+### Regular Order Flow
+```bash
+# 1. Create an order
+curl -X POST "http://localhost:8000/api/v1/orders" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_email": "test@example.com",
+    "customer_name": "Test Customer", 
+    "currency": "USD",
+    "line_items": [
+      {
+        "sku_id": "650e8400-e29b-41d4-a716-446655440001",
+        "quantity": 1
+      }
+    ]
+  }'
+
+# 2. Process payment (mock)
+curl -X POST "http://localhost:8000/api/v1/orders/{order_id}/payments" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 999.00,
+    "currency": "USD",
+    "payment_method": "credit_card"
+  }'
+```
+
+### Flash Sale Testing (Overselling Prevention)
+```bash
+# 1. Get active flash sales
+curl http://localhost:8000/api/v1/flash-sales
+
+# 2. Purchase from flash sale 
+curl -X POST "http://localhost:8000/api/v1/flash-sales/{flash_sale_id}/purchase" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "quantity": 1
+  }'
+
+# 3. Test overselling protection
+curl -X POST "http://localhost:8000/api/v1/flash-sales/{flash_sale_id}/purchase" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "quantity": 25
+  }'
+# Should fail with insufficient quantity error
+
+# 4. Test per-customer limits  
+curl -X POST "http://localhost:8000/api/v1/flash-sales/{flash_sale_id}/purchase" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "quantity": 3
+  }'
+# Should fail with max quantity per customer error (limit is 2)
+```
+
+## Database Access
+
+```bash
+# Connect to MySQL
+docker exec -it flashsale-mysql-1 mysql -u flashsale_user -pflashsale_password flashsale_db
+
+# Connect to Redis
+docker exec -it flashsale-redis-1 redis-cli
+
+# View logs
+docker-compose logs -f python-service
+docker-compose logs -f csharp-service
+docker-compose logs -f java-service
+```
 
 ## Deployment
 
