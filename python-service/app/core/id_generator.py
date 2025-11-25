@@ -161,15 +161,13 @@ class JavaSnowflakeGenerator(SnowflakeIDGenerator):
 SERVICE_TYPE = os.environ.get('SERVICE_TYPE', 'python')  # python|csharp|java
 INSTANCE_ID = int(os.environ.get('INSTANCE_ID', '1'))    # 1-341
 
-if SERVICE_TYPE == 'python':
-    id_generator = PythonSnowflakeGenerator(INSTANCE_ID)
-elif SERVICE_TYPE == 'csharp':
-    id_generator = CSharpSnowflakeGenerator(INSTANCE_ID)
-elif SERVICE_TYPE == 'java':
-    id_generator = JavaSnowflakeGenerator(INSTANCE_ID)
-else:
-    # Default to Python with instance 1
-    id_generator = PythonSnowflakeGenerator(1)
+# For multi-worker deployments, use PID to ensure each worker has unique machine_id
+# PID mod 1024 ensures we stay within the 10-bit machine_id range
+WORKER_MACHINE_ID = (INSTANCE_ID * 100 + os.getpid()) % 1024
+
+# Use base SnowflakeIDGenerator directly for multi-worker deployments
+# This allows full 0-1023 range instead of being limited by wrapper class validations
+id_generator = SnowflakeIDGenerator(WORKER_MACHINE_ID)
 
 
 def generate_id() -> int:

@@ -213,6 +213,56 @@ pytest tests/ -v
 3. **Connection Pooling**: High backlog (2048) and concurrency limits (10000)
 4. **Plain Text Response**: Minimal serialization overhead for health checks
 
+**Order API Stress Testing (Baseline Performance):**
+
+The order API stress test measures baseline database transaction performance with MySQL.
+
+```bash
+cd python-service
+
+# Step 1: Generate test data (500 SKUs with 10,000 stock each)
+python setup_test_data.py 100 5 10000
+
+# Step 2: Start server with optimal workers
+./START_SERVER_OPTIMIZED.sh
+
+# Step 3: Run order API stress test (default: 12 threads, 100 connections, 30s)
+./benchmark_orders.sh
+
+# Custom parameters: URL, threads, connections, duration
+./benchmark_orders.sh http://localhost:8000/api/v1/orders 24 200 60s
+```
+
+**What the stress test does:**
+- Creates real orders with database writes (orders, order_line_items, inventory updates)
+- Each request randomly selects 1-3 SKUs and creates an order
+- Uses wrk with Lua script to generate realistic concurrent load
+- Tracks success rate, latency distribution, and throughput
+
+**Expected baseline performance:**
+- Health endpoint: ~95,000 req/s (no DB operations)
+- Order API: ~1,000-3,000 req/s (4-7 DB operations per request)
+- This 30-50x difference shows the cost of ACID database transactions
+
+**Analyzing results:**
+```bash
+# Check created orders
+mysql -h 127.0.0.1 -P 3306 -u syracuse -p orange315
+SELECT COUNT(*) FROM orders WHERE customer_email LIKE 'stress-test%';
+SELECT COUNT(*) FROM order_line_items;
+
+# Clean test data
+python setup_test_data.py 0 0 0
+```
+
+**Room for improvement:**
+- Redis caching for SKU data (10-50% improvement)
+- Batch processing (2-3x improvement)
+- Optimistic locking (10-20% improvement)
+- Connection pooling optimization (10-20% improvement)
+
+See `MYSQL_INDEX_ANALYSIS.md` for detailed index optimization analysis.
+
 #### C# Service
 ```bash
 cd csharp-service
