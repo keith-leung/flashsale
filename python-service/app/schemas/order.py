@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.models.order import OrderStatus, PaymentStatus
 
@@ -28,20 +28,19 @@ class OrderLineItemResponse(BaseModel):
     sku_code: str
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderCreate(BaseModel):
     """Schema for creating an order."""
-    customer_email: str = Field(..., regex=r'^[^@]+@[^@]+\.[^@]+$')
+    customer_email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
     customer_name: Optional[str] = None
     tax_amount: Optional[Decimal] = Field(0, ge=0, decimal_places=2)
     shipping_amount: Optional[Decimal] = Field(0, ge=0, decimal_places=2)
     currency: str = Field("USD", min_length=3, max_length=3)
     notes: Optional[str] = None
     flash_sale_id: Optional[str] = None
-    line_items: List[OrderLineItemCreate] = Field(..., min_items=1)
+    line_items: List[OrderLineItemCreate] = Field(..., min_length=1)
 
 
 class OrderUpdate(BaseModel):
@@ -69,8 +68,7 @@ class OrderResponse(BaseModel):
     updated_at: datetime
     line_items: List[OrderLineItemResponse] = []
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaymentCreate(BaseModel):
@@ -96,5 +94,4 @@ class PaymentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

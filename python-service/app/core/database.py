@@ -1,15 +1,26 @@
 """Database configuration and setup."""
 
+import logging
+import os
+import sys
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Use NullPool for testing to avoid connection sharing across event loops
+pool_class = NullPool if os.getenv("TESTING") or "pytest" in sys.modules else None
 
 # Create async engine
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     future=True,
+    isolation_level="READ COMMITTED",
+    poolclass=pool_class,
 )
 
 # Create async session factory
@@ -25,16 +36,9 @@ Base = declarative_base()
 
 async def get_db() -> AsyncSession:
     """Dependency to get database session."""
+    logger.info("Creating DB session with READ COMMITTED isolation level.")
     async with AsyncSessionLocal() as session:
         try:
             yield session
         finally:
             await session.close()
-
-
-async def create_tables():
-    """Create database tables."""
-    async with engine.begin() as conn:
-        # Import models here to register them
-        from app.models import spu, sku, flash_sale, inventory, order  # noqa
-        await conn.run_sync(Base.metadata.create_all)

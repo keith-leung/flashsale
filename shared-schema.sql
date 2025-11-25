@@ -1,9 +1,20 @@
--- Flash Sale Microservices - Shared MySQL 8+ Schema
+-- Flash Sale Microservices - Shared Database Schema
 -- This schema is used by all three services (Python, C#, Java)
--- Optimized for flash sale performance with InnoDB storage engine
+-- Optimized for flash sale performance with MariaDB InnoDB storage engine
+--
+-- Database: orange315
+-- MariaDB Version: 10.6.22+ (compatible with MySQL 8+)
+-- Redis Version: 6.0.16+
+--
+-- Connection Info:
+--   Host: 127.0.0.1
+--   Port: 3306
+--   Database: orange315
+--   User: syracuse
+--   Password: Orange_315_Forever!
 
-CREATE DATABASE IF NOT EXISTS flashsale_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE flashsale_db;
+CREATE DATABASE IF NOT EXISTS orange315 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE orange315;
 
 -- SPU (Standard Product Unit) Table  
 CREATE TABLE spus (

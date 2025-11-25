@@ -4,11 +4,11 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Integer, Numeric, BigInteger
+from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Integer, Numeric
+from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.core.id_generator import generate_id
 
 
 class SKU(Base):
@@ -16,12 +16,12 @@ class SKU(Base):
     
     __tablename__ = "skus"
     
-    id = Column(BigInteger, primary_key=True, default=generate_id)
+    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     sku_code = Column(String(255), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=True)
     
     # Foreign Keys
-    spu_id = Column(BigInteger, ForeignKey("spus.id"), nullable=False, index=True)
+    spu_id = Column(CHAR(36), ForeignKey("spus.id"), nullable=False, index=True)
     
     # Product details
     price = Column(Numeric(precision=10, scale=2), nullable=False)

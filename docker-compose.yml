@@ -14,7 +14,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./shared-schema.sql:/docker-entrypoint-initdb.d/init.sql
-    command: --default-storage-engine=InnoDB --innodb-flush-log-at-trx-commit=2 --innodb-buffer-pool-size=256M --max-connections=1000
+    command: --default-storage-engine=InnoDB --innodb-flush-log-at-trx-commit=1 --innodb-buffer-pool-size=256M --max-connections=1000
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "flashsale_user", "-pflashsale_password"]
       interval: 10s

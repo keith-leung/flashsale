@@ -14,23 +14,23 @@ from app.core.database import Base
 
 class OrderStatus(str, Enum):
     """Order status enumeration."""
-    PENDING = "pending"
-    CONFIRMED = "confirmed"
-    PROCESSING = "processing"
-    SHIPPED = "shipped"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
-    REFUNDED = "refunded"
+    pending = "pending"
+    confirmed = "confirmed"
+    processing = "processing"
+    shipped = "shipped"
+    delivered = "delivered"
+    cancelled = "cancelled"
+    refunded = "refunded"
 
 
 class PaymentStatus(str, Enum):
     """Payment status enumeration."""
-    PENDING = "pending"
-    AUTHORIZED = "authorized"
-    CAPTURED = "captured"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    REFUNDED = "refunded"
+    pending = "pending"
+    authorized = "authorized"
+    captured = "captured"
+    failed = "failed"
+    cancelled = "cancelled"
+    refunded = "refunded"
 
 
 class Order(Base):
@@ -53,7 +53,7 @@ class Order(Base):
     currency = Column(String(3), default="USD", nullable=False)
     
     # Status and metadata
-    status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False, index=True)
+    status = Column(SQLEnum(OrderStatus), default=OrderStatus.pending, nullable=False, index=True)
     notes = Column(Text, nullable=True)
     
     # Flash sale reference (optional)
@@ -120,7 +120,7 @@ class Payment(Base):
     gateway_response = Column(Text, nullable=True)  # JSON response from gateway
     
     # Status and metadata
-    status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True)
+    status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.pending, nullable=False, index=True)
     reference_number = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
     

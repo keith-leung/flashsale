@@ -4,11 +4,11 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from sqlalchemy import Column, String, Text, DateTime, Boolean, Float, BigInteger
+from sqlalchemy import Column, String, Text, DateTime, Boolean, Float
+from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.core.id_generator import generate_id
 
 
 class SPU(Base):
@@ -16,7 +16,7 @@ class SPU(Base):
     
     __tablename__ = "spus"
     
-    id = Column(BigInteger, primary_key=True, default=generate_id)
+    id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(250), nullable=False, index=True)
     slug = Column(String(255), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)

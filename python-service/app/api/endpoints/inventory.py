@@ -9,15 +9,16 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.inventory import Inventory
 from app.schemas.inventory import InventoryUpdate, InventoryResponse
+from app.schemas.response import ResponseDTO
 
 router = APIRouter()
 
 
-@router.get("/{sku_id}", response_model=InventoryResponse)
+@router.get("/{sku_id}", response_model=ResponseDTO[InventoryResponse])
 async def get_inventory(sku_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get inventory for a specific SKU."""
     result = await db.execute(
-        select(Inventory).filter(Inventory.sku_id == sku_id)
+        select(Inventory).filter(Inventory.sku_id == str(sku_id))
     )
     inventory = result.scalar_one_or_none()
     
@@ -27,10 +28,10 @@ async def get_inventory(sku_id: UUID, db: AsyncSession = Depends(get_db)):
             detail="Inventory not found for this SKU"
         )
     
-    return inventory
+    return ResponseDTO(data=inventory)
 
 
-@router.put("/{sku_id}", response_model=InventoryResponse)
+@router.put("/{sku_id}", response_model=ResponseDTO[InventoryResponse])
 async def update_inventory(
     sku_id: UUID,
     inventory_data: InventoryUpdate,
@@ -38,7 +39,7 @@ async def update_inventory(
 ):
     """Update inventory for a specific SKU."""
     result = await db.execute(
-        select(Inventory).filter(Inventory.sku_id == sku_id)
+        select(Inventory).filter(Inventory.sku_id == str(sku_id))
     )
     inventory = result.scalar_one_or_none()
     
@@ -49,17 +50,17 @@ async def update_inventory(
         )
     
     # Update fields
-    update_data = inventory_data.dict(exclude_unset=True)
+    update_data = inventory_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(inventory, field, value)
     
     await db.commit()
     await db.refresh(inventory)
     
-    return inventory
+    return ResponseDTO(data=inventory)
 
 
-@router.post("/{sku_id}/adjust", response_model=InventoryResponse)
+@router.post("/{sku_id}/adjust", response_model=ResponseDTO[InventoryResponse])
 async def adjust_inventory(
     sku_id: UUID,
     adjustment: int,
@@ -68,7 +69,7 @@ async def adjust_inventory(
 ):
     """Adjust inventory quantity (positive for increase, negative for decrease)."""
     result = await db.execute(
-        select(Inventory).filter(Inventory.sku_id == sku_id)
+        select(Inventory).filter(Inventory.sku_id == str(sku_id))
     )
     inventory = result.scalar_one_or_none()
     
@@ -92,10 +93,10 @@ async def adjust_inventory(
     await db.commit()
     await db.refresh(inventory)
     
-    return inventory
+    return ResponseDTO(data=inventory)
 
 
-@router.post("/{sku_id}/reserve", response_model=InventoryResponse)
+@router.post("/{sku_id}/reserve", response_model=ResponseDTO[InventoryResponse])
 async def reserve_inventory(
     sku_id: UUID,
     quantity: int,
@@ -109,7 +110,7 @@ async def reserve_inventory(
         )
     
     result = await db.execute(
-        select(Inventory).filter(Inventory.sku_id == sku_id)
+        select(Inventory).filter(Inventory.sku_id == str(sku_id))
     )
     inventory = result.scalar_one_or_none()
     
@@ -128,10 +129,10 @@ async def reserve_inventory(
     await db.commit()
     await db.refresh(inventory)
     
-    return inventory
+    return ResponseDTO(data=inventory)
 
 
-@router.post("/{sku_id}/release", response_model=InventoryResponse)
+@router.post("/{sku_id}/release", response_model=ResponseDTO[InventoryResponse])
 async def release_inventory(
     sku_id: UUID,
     quantity: int,
@@ -145,7 +146,7 @@ async def release_inventory(
         )
     
     result = await db.execute(
-        select(Inventory).filter(Inventory.sku_id == sku_id)
+        select(Inventory).filter(Inventory.sku_id == str(sku_id))
     )
     inventory = result.scalar_one_or_none()
     
@@ -160,4 +161,4 @@ async def release_inventory(
     await db.commit()
     await db.refresh(inventory)
     
-    return inventory
+    return ResponseDTO(data=inventory)

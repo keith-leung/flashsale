@@ -19,11 +19,12 @@ from app.schemas.flash_sale import (
     PurchaseRequest,
     PurchaseResponse
 )
+from app.schemas.response import ResponseDTO
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[FlashSaleEventResponse])
+@router.get("", response_model=ResponseDTO[List[FlashSaleEventResponse]])
 async def list_flash_sales(
     skip: int = 0,
     limit: int = 100,
@@ -43,17 +44,18 @@ async def list_flash_sales(
     # Update status for each flash sale before returning
     for flash_sale in flash_sales:
         flash_sale.update_status()
-    
+
     await db.commit()
-    
-    return flash_sales
+    flash_sale_responses = [FlashSaleEventResponse.model_validate(fs) for fs in flash_sales]
+
+    return ResponseDTO(data=flash_sale_responses)
 
 
-@router.get("/{flash_sale_id}", response_model=FlashSaleEventResponse)
+@router.get("/{flash_sale_id}", response_model=ResponseDTO[FlashSaleEventResponse])
 async def get_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get a specific flash sale event by ID."""
     result = await db.execute(
-        select(FlashSaleEvent).filter(FlashSaleEvent.id == flash_sale_id)
+        select(FlashSaleEvent).filter(FlashSaleEvent.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -67,34 +69,34 @@ async def get_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_db)
     flash_sale.update_status()
     await db.commit()
     
-    return flash_sale
+    return ResponseDTO(data=flash_sale)
 
 
-@router.post("/", response_model=FlashSaleEventResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ResponseDTO[FlashSaleEventResponse], status_code=status.HTTP_201_CREATED)
 async def create_flash_sale(
     flash_sale_data: FlashSaleEventCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new flash sale event."""
     # Check if SKU exists
-    result = await db.execute(select(SKU).filter(SKU.id == flash_sale_data.sku_id))
+    result = await db.execute(select(SKU).filter(SKU.id == str(flash_sale_data.sku_id)))
     if not result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="SKU not found"
         )
     
-    flash_sale = FlashSaleEvent(**flash_sale_data.dict())
+    flash_sale = FlashSaleEvent(**flash_sale_data.model_dump())
     flash_sale.update_status()  # Set initial status
     
     db.add(flash_sale)
     await db.commit()
     await db.refresh(flash_sale)
     
-    return flash_sale
+    return ResponseDTO(status=201, message="Flash sale created successfully", data=flash_sale)
 
 
-@router.put("/{flash_sale_id}", response_model=FlashSaleEventResponse)
+@router.put("/{flash_sale_id}", response_model=ResponseDTO[FlashSaleEventResponse])
 async def update_flash_sale(
     flash_sale_id: UUID,
     flash_sale_data: FlashSaleEventUpdate,
@@ -102,7 +104,7 @@ async def update_flash_sale(
 ):
     """Update an existing flash sale event."""
     result = await db.execute(
-        select(FlashSaleEvent).filter(FlashSaleEvent.id == flash_sale_id)
+        select(FlashSaleEvent).filter(FlashSaleEvent.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -113,7 +115,7 @@ async def update_flash_sale(
         )
     
     # Update fields
-    update_data = flash_sale_data.dict(exclude_unset=True)
+    update_data = flash_sale_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(flash_sale, field, value)
     
@@ -122,10 +124,10 @@ async def update_flash_sale(
     await db.commit()
     await db.refresh(flash_sale)
     
-    return flash_sale
+    return ResponseDTO(data=flash_sale)
 
 
-@router.post("/{flash_sale_id}/purchase", response_model=PurchaseResponse)
+@router.post("/{flash_sale_id}/purchase", response_model=ResponseDTO[PurchaseResponse])
 async def purchase_flash_sale(
     flash_sale_id: UUID,
     purchase_data: PurchaseRequest,
@@ -138,7 +140,7 @@ async def purchase_flash_sale(
         .options(
             selectinload(FlashSaleEvent.sku).selectinload(SKU.inventory)
         )
-        .filter(FlashSaleEvent.id == flash_sale_id)
+        .filter(FlashSaleEvent.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -163,35 +165,38 @@ async def purchase_flash_sale(
         if purchase_data.quantity > flash_sale.max_quantity_per_customer:
             reasons.append(f"Quantity exceeds maximum per customer ({flash_sale.max_quantity_per_customer})")
         
-        return PurchaseResponse(
+        purchase_response = PurchaseResponse(
             success=False,
             message=f"Purchase failed: {'; '.join(reasons)}",
             flash_sale_id=flash_sale_id,
             quantity_purchased=0,
             remaining_quantity=flash_sale.remaining_quantity
         )
+        return ResponseDTO(status=400, message="Purchase failed", data=purchase_response)
     
     # Check inventory availability
     inventory = flash_sale.sku.inventory
     if inventory and not inventory.can_fulfill_quantity(purchase_data.quantity):
-        return PurchaseResponse(
+        purchase_response = PurchaseResponse(
             success=False,
             message=f"Insufficient inventory (only {inventory.available_quantity} available)",
             flash_sale_id=flash_sale_id,
             quantity_purchased=0,
             remaining_quantity=flash_sale.remaining_quantity
         )
+        return ResponseDTO(status=400, message="Insufficient inventory", data=purchase_response)
     
     # Perform the purchase
     success = flash_sale.purchase_quantity(purchase_data.quantity)
     if not success:
-        return PurchaseResponse(
+        purchase_response = PurchaseResponse(
             success=False,
             message="Purchase failed due to unexpected error",
             flash_sale_id=flash_sale_id,
             quantity_purchased=0,
             remaining_quantity=flash_sale.remaining_quantity
         )
+        return ResponseDTO(status=500, message="Purchase failed", data=purchase_response)
     
     # Update inventory if tracking is enabled
     if inventory and flash_sale.sku.track_inventory:
@@ -199,20 +204,21 @@ async def purchase_flash_sale(
     
     await db.commit()
     
-    return PurchaseResponse(
+    purchase_response = PurchaseResponse(
         success=True,
         message=f"Successfully purchased {purchase_data.quantity} items",
         flash_sale_id=flash_sale_id,
         quantity_purchased=purchase_data.quantity,
         remaining_quantity=flash_sale.remaining_quantity
     )
+    return ResponseDTO(data=purchase_response)
 
 
 @router.delete("/{flash_sale_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_db)):
     """Delete a flash sale event."""
     result = await db.execute(
-        select(FlashSaleEvent).filter(FlashSaleEvent.id == flash_sale_id)
+        select(FlashSaleEvent).filter(FlashSaleEvent.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -224,3 +230,4 @@ async def delete_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_
     
     await db.delete(flash_sale)
     await db.commit()
+    return ResponseDTO(status=204, message="Flash sale deleted successfully")

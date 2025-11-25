@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from app.models.flash_sale import FlashSaleStatus
 
@@ -20,15 +20,16 @@ class FlashSaleEventBase(BaseModel):
     end_time: datetime
     is_active: bool = True
 
+    @model_validator(mode='after')
+    def end_time_must_be_after_start_time(self):
+        if self.end_time <= self.start_time:
+            raise ValueError('end_time must be after start_time')
+        return self
+
 
 class FlashSaleEventCreate(FlashSaleEventBase):
     """Schema for creating a Flash Sale Event."""
-    
-    @validator('end_time')
-    def end_time_must_be_after_start_time(cls, v, values):
-        if 'start_time' in values and v <= values['start_time']:
-            raise ValueError('end_time must be after start_time')
-        return v
+    pass
 
 
 class FlashSaleEventUpdate(BaseModel):
@@ -40,13 +41,12 @@ class FlashSaleEventUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     is_active: Optional[bool] = None
-    
-    @validator('end_time')
-    def end_time_must_be_after_start_time(cls, v, values):
-        if v is not None and 'start_time' in values and values['start_time'] is not None:
-            if v <= values['start_time']:
-                raise ValueError('end_time must be after start_time')
-        return v
+
+    @model_validator(mode='after')
+    def end_time_must_be_after_start_time(self):
+        if self.end_time and self.start_time and self.end_time <= self.start_time:
+            raise ValueError('end_time must be after start_time')
+        return self
 
 
 class FlashSaleEventResponse(FlashSaleEventBase):
@@ -60,8 +60,7 @@ class FlashSaleEventResponse(FlashSaleEventBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PurchaseRequest(BaseModel):
