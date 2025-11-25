@@ -102,9 +102,9 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     request_id = str(uuid.uuid4())[:8]
 
-    # Read request body for logging
+    # Read request body for logging (skip for /health to minimize overhead)
     request_body = None
-    if request.method in ["POST", "PUT", "PATCH"]:
+    if request.method in ["POST", "PUT", "PATCH"] and request.url.path != "/health":
         try:
             body_bytes = await request.body()
             if body_bytes:
@@ -116,26 +116,27 @@ async def log_requests(request: Request, call_next):
         except:
             request_body = "<unable to parse>"
 
-    # Log request with input
-    logger.info(
-        f"[{request_id}] REQUEST: {request.method} {request.url.path}",
-        extra={
-            "request_id": request_id,
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": dict(request.query_params),
-            "request_body": request_body,
-            "client_ip": request.client.host if request.client else None,
-        },
-    )
+    # Log request with input (skip detailed logging for /health)
+    if request.url.path != "/health":
+        logger.info(
+            f"[{request_id}] REQUEST: {request.method} {request.url.path}",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "query_params": dict(request.query_params),
+                "request_body": request_body,
+                "client_ip": request.client.host if request.client else None,
+            },
+        )
 
     try:
         response = await call_next(request)
         duration = time.time() - start_time
 
-        # Try to read response body for logging
+        # Try to read response body for logging (skip for /health to avoid overhead)
         response_body = None
-        if response.status_code in [200, 201]:
+        if response.status_code in [200, 201] and request.url.path != "/health":
             try:
                 body_bytes = b""
                 async for chunk in response.body_iterator:
@@ -153,16 +154,17 @@ async def log_requests(request: Request, call_next):
             except:
                 response_body = "<unable to parse>"
 
-        # Log response with output
-        logger.info(
-            f"[{request_id}] RESPONSE: {response.status_code} ({duration:.4f}s)",
-            extra={
-                "request_id": request_id,
-                "status_code": response.status_code,
-                "duration_sec": round(duration, 4),
-                "response_body": response_body,
-            },
-        )
+        # Log response with output (skip for /health)
+        if request.url.path != "/health":
+            logger.info(
+                f"[{request_id}] RESPONSE: {response.status_code} ({duration:.4f}s)",
+                extra={
+                    "request_id": request_id,
+                    "status_code": response.status_code,
+                    "duration_sec": round(duration, 4),
+                    "response_body": response_body,
+                },
+            )
         return response
     except Exception as e:
         duration = time.time() - start_time
@@ -201,6 +203,12 @@ async def root(request: Request):
 
 
 @app.get("/health")
+@app.head("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "flash-sale-python"}
+    """Health check endpoint for load balancer.
+
+    Returns plain text '200 OK' following BoA internal pattern.
+    Supports both GET and HEAD methods.
+    """
+    from starlette.responses import PlainTextResponse
+    return PlainTextResponse("200 OK", status_code=200)

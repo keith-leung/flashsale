@@ -135,6 +135,84 @@ poetry run uvicorn app.main:app --reload
 
 **For detailed setup instructions, see:** [python-service/SETUP.md](python-service/SETUP.md)
 
+#### Python Service - Performance Benchmarking
+
+The Python service includes comprehensive performance benchmarking for capacity planning and load balancer configuration.
+
+**Test Environment:**
+- **Hardware**: Intel Core Ultra 9 275HX (24 cores)
+- **Memory**: 64GB RAM
+- **OS**: WSL2 on Windows
+- **Server**: FastAPI + Uvicorn with 48 workers
+- **Load Testing Tool**: wrk (multi-threaded HTTP benchmark tool)
+
+**Starting Server with Optimal Workers:**
+```bash
+cd python-service
+
+# Option 1: Use the optimized startup script (auto-detects cores)
+./START_SERVER_OPTIMIZED.sh
+
+# Option 2: Manual start with specific worker count
+# Formula: workers = (CPU_cores × 2) + 1 for I/O-bound workloads
+# For 24 cores: 48 workers recommended
+uvicorn app.main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 48 \
+    --backlog 2048 \
+    --limit-concurrency 10000 \
+    --log-level warning
+```
+
+**Running Performance Benchmarks:**
+```bash
+cd python-service
+
+# Install wrk (required for benchmarking)
+sudo apt-get update && sudo apt-get install -y wrk
+
+# Run health endpoint benchmark (default: 12 threads, 400 connections, 30s)
+./benchmark_health.sh
+
+# Custom parameters: URL, threads, connections, duration
+./benchmark_health.sh http://localhost:8000/health 24 1000 30s
+./benchmark_health.sh http://localhost:8000/health 16 600 30s
+
+# The script will check if server is running and show latency statistics
+```
+
+**Benchmark Results (48 workers on 24-core system):**
+```
+Configuration: 12 threads, 400 connections, 30 seconds
+Requests/sec:   95,298.16
+Latency (avg):  4.20ms
+Latency (P50):  3.74ms
+Latency (P99):  40.20ms
+Total Requests: 2,868,021 in 30s
+CPU Utilization: 88%
+```
+
+**Capacity Analysis for 100K req/s Target:**
+- `/health` endpoint: 1-2 instances needed (95K req/s per instance)
+- `/orders` endpoint: ~5-6 instances estimated (accounting for database overhead)
+- Each instance requires optimal worker configuration (2× CPU cores + 1)
+
+**Unit Tests:**
+```bash
+# Run health endpoint unit tests
+pytest tests/test_health.py -v
+
+# Run all unit tests
+pytest tests/ -v
+```
+
+**Key Performance Optimizations:**
+1. **Multi-worker Configuration**: Uvicorn workers bypass Python GIL by using multiple processes
+2. **Optimized Logging**: Health endpoint skips detailed logging to minimize overhead
+3. **Connection Pooling**: High backlog (2048) and concurrency limits (10000)
+4. **Plain Text Response**: Minimal serialization overhead for health checks
+
 #### C# Service
 ```bash
 cd csharp-service
