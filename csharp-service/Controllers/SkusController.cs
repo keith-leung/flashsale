@@ -24,7 +24,7 @@ public class SkusController : ControllerBase
     public async Task<ActionResult<IEnumerable<SkuResponseDto>>> GetSkus(
         [FromQuery] int skip = 0,
         [FromQuery] int take = 100,
-        [FromQuery] long? spuId = null)
+        [FromQuery] Guid? spuId = null)
     {
         var skus = await _skuService.GetAllAsync(skip, take, spuId);
         return Ok(skus);
@@ -34,7 +34,7 @@ public class SkusController : ControllerBase
     /// Get SKU by ID
     /// </summary>
     [HttpGet("{id}")]
-    public async Task<ActionResult<SkuResponseDto>> GetSku(long id)
+    public async Task<ActionResult<SkuResponseDto>> GetSku(Guid id)
     {
         var sku = await _skuService.GetByIdAsync(id);
         if (sku == null)
@@ -64,7 +64,7 @@ public class SkusController : ControllerBase
     /// Update an existing SKU
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<ActionResult<SkuResponseDto>> UpdateSku(long id, SkuUpdateDto dto)
+    public async Task<ActionResult<SkuResponseDto>> UpdateSku(Guid id, SkuUpdateDto dto)
     {
         try
         {
@@ -84,7 +84,7 @@ public class SkusController : ControllerBase
     /// Delete a SKU
     /// </summary>
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteSku(long id)
+    public async Task<IActionResult> DeleteSku(Guid id)
     {
         var success = await _skuService.DeleteAsync(id);
         if (!success)

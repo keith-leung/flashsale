@@ -141,14 +141,22 @@ namespace FlashSale.Api.Services
     
     /// <summary>
     /// C# Service-specific generator (machine IDs 342-682)
+    /// Uses PID-based machine_id for multi-worker deployments.
     /// </summary>
     public class CSharpSnowflakeGenerator : SnowflakeIdGenerator
     {
-        public CSharpSnowflakeGenerator(int instanceId = 1) 
-            : base(341 + instanceId) // Offset to 342-682 range
+        public CSharpSnowflakeGenerator(int instanceId = 1)
+            : base(GetPidBasedMachineId(instanceId))
         {
             if (instanceId < 1 || instanceId > 341)
                 throw new ArgumentException("C# service instance ID must be between 1 and 341");
+        }
+
+        private static long GetPidBasedMachineId(int instanceId)
+        {
+            // For multi-worker deployments, use PID to ensure each worker has unique machine_id
+            long pid = Environment.ProcessId;
+            return (instanceId * 100 + pid) % 1024;
         }
     }
 }

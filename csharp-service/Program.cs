@@ -1,3 +1,4 @@
+using FlashSale.Api.Common;
 using FlashSale.Api.Data;
 using FlashSale.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,11 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = new SnakeCaseNamingPolicy();
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -24,8 +29,8 @@ builder.Services.AddSwaggerGen(c =>
 // Database
 builder.Services.AddDbContext<FlashSaleDbContext>(options =>
     options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
-        new MySqlServerVersion(new Version(8, 0))));
-
+        new MySqlServerVersion(new Version(8, 0)))
+    .UseSnakeCaseNamingConvention());
 // Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
 {
@@ -35,6 +40,10 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
 
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(Program));
+
+// Snowflake ID Generator
+var instanceId = builder.Configuration.GetValue<int>("App:InstanceId", 1);
+builder.Services.AddSingleton(new CSharpSnowflakeGenerator(instanceId));
 
 // Services
 builder.Services.AddScoped<ISpuService, SpuService>();

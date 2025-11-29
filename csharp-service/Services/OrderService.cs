@@ -11,12 +11,14 @@ public class OrderService : IOrderService
     private readonly FlashSaleDbContext _context;
     private readonly IMapper _mapper;
     private readonly ILogger<OrderService> _logger;
+    private readonly CSharpSnowflakeGenerator _idGenerator;
 
-    public OrderService(FlashSaleDbContext context, IMapper mapper, ILogger<OrderService> logger)
+    public OrderService(FlashSaleDbContext context, IMapper mapper, ILogger<OrderService> logger, CSharpSnowflakeGenerator idGenerator)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
+        _idGenerator = idGenerator;
     }
 
     public async Task<IEnumerable<OrderResponseDto>> GetAllAsync(int skip = 0, int take = 100, string? customerEmail = null)
@@ -56,8 +58,8 @@ public class OrderService : IOrderService
         
         try
         {
-            // Generate order number
-            var orderNumber = $"ORD-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}-{dto.CustomerEmail[..3].ToUpper()}";
+            // Generate order number using Snowflake ID
+            var orderNumber = $"ORD-{_idGenerator.Generate()}";
             
             // Create order
             var order = new Order

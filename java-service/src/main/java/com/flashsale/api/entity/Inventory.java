@@ -16,7 +16,7 @@ import java.util.UUID;
 public class Inventory extends BaseEntity {
 
     @NotNull
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, columnDefinition = "CHAR(36)")
     private UUID skuId;
 
     @Min(0)

@@ -1,17 +1,17 @@
 #!/bin/bash
-# Order API stress test using wrk with database writes
+# Order API stress test for C# service using wrk with database writes
 # This tests the BASELINE performance with MySQL transactions
 
 set -e
 
 # Configuration
-URL="${1:-http://localhost:8080/api/v1/orders}"
+URL="${1:-http://localhost:8082/api/v1/orders}"
 THREADS="${2:-12}"
 CONNECTIONS="${3:-100}"
 DURATION="${4:-30s}"
 
 echo "=========================================="
-echo "Order API Stress Test (Baseline)"
+echo "C# Order API Stress Test (Baseline)"
 echo "=========================================="
 echo ""
 echo "This test measures baseline order processing performance"
@@ -33,7 +33,8 @@ fi
 if [ ! -f "/tmp/stress_test_sku_ids.txt" ]; then
     echo "ERROR: Test data not found!"
     echo ""
-    echo "Please run setup first:"
+    echo "Please run setup first (from python-service directory):"
+    echo "  cd ../python-service"
     echo "  python setup_test_data.py [num_spus] [skus_per_spu] [stock_per_sku]"
     echo ""
     echo "Example:"
@@ -51,12 +52,12 @@ echo ""
 
 # Check if server is responding
 echo "Checking server status..."
-HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/health" || echo "000")
+HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8082/health" || echo "000")
 if [ "$HEALTH_CHECK" != "200" ]; then
-    echo "WARNING: Server is not responding at http://localhost:8080/health"
+    echo "WARNING: Server is not responding at http://localhost:8082/health"
     echo ""
     echo "Start the server with:"
-    echo "  ./START_SERVER_OPTIMIZED.sh"
+    echo "  ./START_SERVER.sh"
     echo ""
     exit 1
 fi
@@ -70,7 +71,7 @@ MAX_CONN=$(mysql -h 127.0.0.1 -P 3306 -u syracuse -pOrange_315_Forever! -e "SHOW
 if [ -n "$MAX_CONN" ]; then
     echo "  max_connections: $MAX_CONN"
     if [ "$MAX_CONN" -lt 200 ]; then
-        echo "  ⚠️  Consider increasing: ./check_mariadb_config.sh"
+        echo "  ⚠️  Consider increasing max_connections"
     else
         echo "  ✓ Sufficient for stress testing"
     fi
@@ -108,10 +109,11 @@ echo "  - Check database: mysql -h 127.0.0.1 -P 3306 -u syracuse -p orange315"
 echo "    SELECT COUNT(*) FROM orders WHERE customer_email LIKE 'stress-test%';"
 echo "    SELECT COUNT(*) FROM order_line_items;"
 echo ""
-echo "To clean test data:"
+echo "To clean test data (from python-service directory):"
+echo "  cd ../python-service"
 echo "  python setup_test_data.py 0 0 0  # Cleans without creating new data"
 echo ""
 echo "To run again with different settings:"
 echo "  ./benchmark_orders.sh <url> <threads> <connections> <duration>"
-echo "  Example: ./benchmark_orders.sh http://localhost:8080/api/v1/orders 24 200 60s"
+echo "  Example: ./benchmark_orders.sh http://localhost:8082/api/v1/orders 24 200 60s"
 echo ""

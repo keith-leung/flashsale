@@ -59,10 +59,8 @@ public class OrderService {
     }
 
     public OrderResponseDto createOrder(OrderCreateDto createDto) {
-        // Generate order number
-        String orderNumber = String.format("ORD-%d-%s", 
-            Instant.now().getEpochSecond(), 
-            createDto.getCustomerEmail().substring(0, 3).toUpperCase());
+        // Generate order number using Snowflake ID
+        String orderNumber = String.format("ORD-%d", idGenerator.generate());
 
         // Create order
         Order order = new Order();
@@ -152,7 +150,7 @@ public class OrderService {
                     });
         }
 
-        order.setStatus(OrderStatus.CANCELLED);
+        order.setStatus(OrderStatus.cancelled);
         orderRepository.save(order);
         
         return true;
@@ -172,11 +170,11 @@ public class OrderService {
 
         // Simulate payment processing
         if (dto.getAmount().compareTo(BigDecimal.ZERO) > 0) {
-            payment.setStatus(PaymentStatus.CAPTURED);
+            payment.setStatus(PaymentStatus.captured);
             payment.setGatewayTransactionId("txn_" + Instant.now().getEpochSecond());
             
             // Update order status
-            order.setStatus(OrderStatus.CONFIRMED);
+            order.setStatus(OrderStatus.confirmed);
             orderRepository.save(order);
         }
 

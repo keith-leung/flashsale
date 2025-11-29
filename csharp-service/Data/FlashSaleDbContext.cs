@@ -20,7 +20,16 @@ public class FlashSaleDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
+
+        // Configure explicit table names to match Python schema
+        modelBuilder.Entity<Spu>().ToTable("spus");
+        modelBuilder.Entity<Sku>().ToTable("skus");
+        modelBuilder.Entity<Inventory>().ToTable("inventory");
+        modelBuilder.Entity<FlashSaleEvent>().ToTable("flash_sale_events");
+        modelBuilder.Entity<Order>().ToTable("orders");
+        modelBuilder.Entity<OrderLineItem>().ToTable("order_line_items");
+        modelBuilder.Entity<Payment>().ToTable("payments");
+
         // Spu configuration
         modelBuilder.Entity<Spu>(entity =>
         {
@@ -124,26 +133,5 @@ public class FlashSaleDbContext : DbContext
         });
     }
     
-    public override int SaveChanges()
-    {
-        UpdateTimestamps();
-        return base.SaveChanges();
-    }
-    
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        UpdateTimestamps();
-        return base.SaveChangesAsync(cancellationToken);
-    }
-    
-    private void UpdateTimestamps()
-    {
-        var entries = ChangeTracker.Entries()
-            .Where(e => e.Entity is BaseEntity && e.State is EntityState.Modified);
-            
-        foreach (var entry in entries)
-        {
-            ((BaseEntity)entry.Entity).UpdatedAt = DateTime.UtcNow;
-        }
-    }
+    // Timestamps are handled by database defaults (created_at, updated_at)
 }

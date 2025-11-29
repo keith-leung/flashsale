@@ -25,7 +25,10 @@ public interface SkuRepository extends JpaRepository<Sku, UUID> {
     
     @Query("SELECT s FROM Sku s JOIN FETCH s.inventory WHERE s.id = :id")
     Optional<Sku> findByIdWithInventory(@Param("id") UUID id);
-    
+
+    @Query("SELECT s FROM Sku s LEFT JOIN FETCH s.inventory LEFT JOIN FETCH s.spu WHERE s.id = :id")
+    Optional<Sku> findByIdWithInventoryAndSpu(@Param("id") UUID id);
+
     @Query("SELECT s FROM Sku s LEFT JOIN FETCH s.inventory")
     Page<Sku> findAllWithInventory(Pageable pageable);
 }

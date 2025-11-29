@@ -45,3 +45,25 @@ Work like an employee who completes the current task and stops.
 - Use PID-based unique IDs for distributed systems
 - Test with multiple workers before deployment
 - Avoid hardcoded instance IDs in multi-worker environments
+
+## Cross-Service Compatibility
+
+### JSON Property Naming
+- All services must use **snake_case** for JSON properties in API requests/responses
+- Python: Uses snake_case natively (FastAPI/Pydantic)
+- Java: Configure `spring.jackson.property-naming-strategy: SNAKE_CASE`
+- C#: Configure custom `SnakeCaseNamingPolicy` for System.Text.Json
+- This ensures load balancer compatibility across all services
+
+### Database Column Naming
+- All services must use **snake_case** for database column names
+- Python: Uses snake_case natively (SQLAlchemy)
+- Java: Configure Hibernate `CamelCaseToUnderscoresNamingStrategy`
+- C#: Use `EFCore.NamingConventions` with `.UseSnakeCaseNamingConvention()`
+
+### UUID Storage Format
+- Store UUIDs as **CHAR(36)** with hyphens (e.g., `1afdec20-b755-426e-bb72-e2a146447d82`)
+- NOT BINARY(16) format
+- Java: Configure `hibernate.type.preferred_uuid_jdbc_type: CHAR` and add `columnDefinition = "CHAR(36)"`
+- C#: Default Guid mapping to CHAR(36) works correctly
+- Python: Store as string with `CHAR(36)` column definition

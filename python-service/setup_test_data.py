@@ -29,10 +29,15 @@ async def clean_test_data():
     """Clean existing test data."""
     async with AsyncSessionLocal() as session:
         # Delete in reverse order of dependencies
-        await session.execute(text("DELETE FROM order_line_items WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE 'stress-test%')"))
+        # First delete ALL order_line_items that reference STRESS SKUs (not just stress-test orders)
+        await session.execute(text("DELETE FROM order_line_items WHERE sku_id IN (SELECT id FROM skus WHERE sku_code LIKE 'STRESS-%')"))
+        # Then delete orders from stress tests
         await session.execute(text("DELETE FROM orders WHERE customer_email LIKE 'stress-test%'"))
+        # Delete inventory for STRESS SKUs
         await session.execute(text("DELETE FROM inventory WHERE sku_id IN (SELECT id FROM skus WHERE sku_code LIKE 'STRESS-%')"))
+        # Delete STRESS SKUs
         await session.execute(text("DELETE FROM skus WHERE sku_code LIKE 'STRESS-%'"))
+        # Delete stress test SPUs
         await session.execute(text("DELETE FROM spus WHERE slug LIKE 'stress-test-%'"))
         await session.commit()
         print("✓ Cleaned existing test data")

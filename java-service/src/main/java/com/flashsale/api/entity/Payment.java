@@ -21,7 +21,7 @@ import java.util.UUID;
 public class Payment extends BaseEntity {
 
     @NotNull
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "CHAR(36)")
     private UUID orderId;
 
     // Payment details
@@ -48,7 +48,7 @@ public class Payment extends BaseEntity {
     // Status and metadata
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PaymentStatus status = PaymentStatus.PENDING;
+    private PaymentStatus status = PaymentStatus.pending;
 
     @Column(length = 100)
     private String referenceNumber;
@@ -156,16 +156,4 @@ public class Payment extends BaseEntity {
     public String toString() {
         return "Payment " + amount + " " + currency + " (" + status + ")";
     }
-}
-
-/**
- * Payment status enumeration
- */
-enum PaymentStatus {
-    PENDING,
-    AUTHORIZED,
-    CAPTURED,
-    FAILED,
-    CANCELLED,
-    REFUNDED
 }

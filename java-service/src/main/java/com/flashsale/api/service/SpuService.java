@@ -1,8 +1,8 @@
 package com.flashsale.api.service;
 
-import com.flashsale.api.dto.SpuCreateDto;
-import com.flashsale.api.dto.SpuResponseDto;
-import com.flashsale.api.dto.SpuUpdateDto;
+import com.flashsale.api.dto.SpuDtos.SpuCreateDto;
+import com.flashsale.api.dto.SpuDtos.SpuResponseDto;
+import com.flashsale.api.dto.SpuDtos.SpuUpdateDto;
 import com.flashsale.api.entity.Spu;
 import com.flashsale.api.mapper.SpuMapper;
 import com.flashsale.api.repository.SpuRepository;

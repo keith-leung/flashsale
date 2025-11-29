@@ -3,7 +3,7 @@
 # This is the primary benchmark tool for measuring maximum throughput
 
 # Configuration
-URL="${1:-http://localhost:8000/health}"
+URL="${1:-http://localhost:8080/health}"
 THREADS="${2:-12}"
 CONNECTIONS="${3:-400}"
 DURATION="${4:-30s}"
@@ -59,7 +59,7 @@ echo ""
 echo "Tips for achieving 100K req/s:"
 echo "  1. Use optimal workers: (CPU_cores × 2) + 1"
 echo "  2. Try different thread/connection combinations:"
-echo "     ./benchmark_health.sh http://localhost:8000/health 24 1000 30s"
-echo "     ./benchmark_health.sh http://localhost:8000/health 16 600 30s"
+echo "     ./benchmark_health.sh http://localhost:8080/health 24 1000 30s"
+echo "     ./benchmark_health.sh http://localhost:8080/health 16 600 30s"
 echo "  3. Monitor CPU utilization during test"
 echo ""

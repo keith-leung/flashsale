@@ -18,36 +18,10 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// Get all inventory records
-    /// </summary>
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<InventoryResponseDto>>> GetInventory(
-        [FromQuery] int skip = 0,
-        [FromQuery] int take = 100,
-        [FromQuery] long? skuId = null)
-    {
-        var inventory = await _inventoryService.GetAllAsync(skip, take, skuId);
-        return Ok(inventory);
-    }
-
-    /// <summary>
-    /// Get inventory by ID
-    /// </summary>
-    [HttpGet("{id}")]
-    public async Task<ActionResult<InventoryResponseDto>> GetInventoryById(long id)
-    {
-        var inventory = await _inventoryService.GetByIdAsync(id);
-        if (inventory == null)
-            return NotFound();
-
-        return Ok(inventory);
-    }
-
-    /// <summary>
     /// Get inventory by SKU ID
     /// </summary>
     [HttpGet("sku/{skuId}")]
-    public async Task<ActionResult<InventoryResponseDto>> GetInventoryBySkuId(long skuId)
+    public async Task<ActionResult<InventoryResponseDto>> GetInventoryBySkuId(Guid skuId)
     {
         var inventory = await _inventoryService.GetBySkuIdAsync(skuId);
         if (inventory == null)
@@ -57,31 +31,14 @@ public class InventoryController : ControllerBase
     }
 
     /// <summary>
-    /// Create new inventory record
+    /// Update inventory for a SKU
     /// </summary>
-    [HttpPost]
-    public async Task<ActionResult<InventoryResponseDto>> CreateInventory(InventoryCreateDto dto)
+    [HttpPut("sku/{skuId}")]
+    public async Task<ActionResult<InventoryResponseDto>> UpdateInventory(Guid skuId, InventoryUpdateDto dto)
     {
         try
         {
-            var inventory = await _inventoryService.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetInventoryById), new { id = inventory.Id }, inventory);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// Update inventory record
-    /// </summary>
-    [HttpPut("{id}")]
-    public async Task<ActionResult<InventoryResponseDto>> UpdateInventory(long id, InventoryUpdateDto dto)
-    {
-        try
-        {
-            var inventory = await _inventoryService.UpdateAsync(id, dto);
+            var inventory = await _inventoryService.UpdateAsync(skuId, dto);
             if (inventory == null)
                 return NotFound();
 
@@ -93,16 +50,4 @@ public class InventoryController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Delete inventory record
-    /// </summary>
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteInventory(long id)
-    {
-        var success = await _inventoryService.DeleteAsync(id);
-        if (!success)
-            return NotFound();
-
-        return NoContent();
-    }
 }

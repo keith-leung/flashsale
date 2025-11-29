@@ -32,7 +32,7 @@ public class FlashSaleEvent extends BaseEntity {
     private String description;
 
     @NotNull
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "CHAR(36)")
     private UUID skuId;
 
     @NotNull
@@ -57,7 +57,7 @@ public class FlashSaleEvent extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private FlashSaleStatus status = FlashSaleStatus.SCHEDULED;
+    private FlashSaleStatus status = FlashSaleStatus.scheduled;
 
     @Column(nullable = false)
     private Boolean isActive = true;
@@ -91,7 +91,7 @@ public class FlashSaleEvent extends BaseEntity {
     }
 
     public boolean isAvailable() {
-        return isActive && status == FlashSaleStatus.ACTIVE && isTimeActive() && getRemainingQuantity() > 0;
+        return isActive && status == FlashSaleStatus.active && isTimeActive() && getRemainingQuantity() > 0;
     }
 
     public boolean canPurchaseQuantity(int quantity) {
@@ -107,7 +107,7 @@ public class FlashSaleEvent extends BaseEntity {
 
         // Update status if sold out
         if (getRemainingQuantity() == 0) {
-            status = FlashSaleStatus.ENDED;
+            status = FlashSaleStatus.ended;
         }
 
         return true;
@@ -116,14 +116,14 @@ public class FlashSaleEvent extends BaseEntity {
     public void updateStatus() {
         LocalDateTime now = LocalDateTime.now();
 
-        if (status == FlashSaleStatus.CANCELLED) return; // Don't change cancelled status
+        if (status == FlashSaleStatus.cancelled) return; // Don't change cancelled status
 
         if (now.isBefore(startTime)) {
-            status = FlashSaleStatus.SCHEDULED;
+            status = FlashSaleStatus.scheduled;
         } else if (now.isAfter(endTime) || getRemainingQuantity() == 0) {
-            status = FlashSaleStatus.ENDED;
+            status = FlashSaleStatus.ended;
         } else {
-            status = FlashSaleStatus.ACTIVE;
+            status = FlashSaleStatus.active;
         }
     }
 
@@ -228,11 +228,4 @@ public class FlashSaleEvent extends BaseEntity {
     public String toString() {
         return name + " (" + status + ")";
     }
-}
-
-enum FlashSaleStatus {
-    SCHEDULED,
-    ACTIVE,
-    ENDED,
-    CANCELLED
 }

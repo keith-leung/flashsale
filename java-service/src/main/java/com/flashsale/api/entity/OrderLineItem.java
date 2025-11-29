@@ -19,11 +19,11 @@ import java.util.UUID;
 public class OrderLineItem extends BaseEntity {
 
     @NotNull
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "CHAR(36)")
     private UUID orderId;
 
     @NotNull
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "CHAR(36)")
     private UUID skuId;
 
     // Item details

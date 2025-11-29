@@ -35,7 +35,7 @@ public class FlashSalesController : ControllerBase
     /// Get flash sale by ID
     /// </summary>
     [HttpGet("{id}")]
-    public async Task<ActionResult<FlashSaleEventResponseDto>> GetFlashSale(long id)
+    public async Task<ActionResult<FlashSaleEventResponseDto>> GetFlashSale(Guid id)
     {
         var flashSale = await _flashSaleService.GetByIdAsync(id);
         if (flashSale == null)
@@ -65,7 +65,7 @@ public class FlashSalesController : ControllerBase
     /// Update an existing flash sale
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<ActionResult<FlashSaleEventResponseDto>> UpdateFlashSale(long id, FlashSaleEventUpdateDto dto)
+    public async Task<ActionResult<FlashSaleEventResponseDto>> UpdateFlashSale(Guid id, FlashSaleEventUpdateDto dto)
     {
         try
         {
@@ -85,7 +85,7 @@ public class FlashSalesController : ControllerBase
     /// Delete a flash sale
     /// </summary>
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteFlashSale(long id)
+    public async Task<IActionResult> DeleteFlashSale(Guid id)
     {
         var success = await _flashSaleService.DeleteAsync(id);
         if (!success)
@@ -98,7 +98,7 @@ public class FlashSalesController : ControllerBase
     /// Purchase items from a flash sale
     /// </summary>
     [HttpPost("{id}/purchase")]
-    public async Task<ActionResult<PurchaseResponseDto>> Purchase(long id, PurchaseRequestDto dto)
+    public async Task<ActionResult<PurchaseResponseDto>> Purchase(Guid id, PurchaseRequestDto dto)
     {
         try
         {

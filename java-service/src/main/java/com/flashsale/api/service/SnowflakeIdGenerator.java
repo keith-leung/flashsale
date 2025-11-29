@@ -41,16 +41,19 @@ public class SnowflakeIdGenerator {
     
     /**
      * Initialize Snowflake generator for Java services.
-     * 
+     * Uses PID-based machine_id for multi-worker deployments.
+     *
      * @param instanceId Java service instance ID (1-341, offset to 683-1023 range)
      */
     public SnowflakeIdGenerator(@Value("${app.instance-id:1}") int instanceId) {
         if (instanceId < 1 || instanceId > 341) {
             throw new IllegalArgumentException("Java service instance ID must be between 1 and 341");
         }
-        
-        this.machineId = 682 + instanceId; // Offset to 683-1023 range
-        
+
+        // For multi-worker deployments, use PID to ensure each worker has unique machine_id
+        long pid = ProcessHandle.current().pid();
+        this.machineId = (instanceId * 100 + pid) % 1024;
+
         if (machineId < 0 || machineId > MACHINE_ID_MASK) {
             throw new IllegalArgumentException(
                 String.format("Machine ID must be between 0 and %d", MACHINE_ID_MASK));

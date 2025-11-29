@@ -51,7 +51,7 @@ sleep 1
 # Start server with optimal settings
 uvicorn app.main:app \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port 8080 \
     --workers $FINAL_WORKERS \
     --log-level info \
     --backlog 2048 \

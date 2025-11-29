@@ -62,13 +62,13 @@ public class Order extends BaseEntity {
     // Status and metadata
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private OrderStatus status = OrderStatus.PENDING;
+    private OrderStatus status = OrderStatus.pending;
 
     @Column(columnDefinition = "TEXT")
     private String notes;
 
     // Flash sale reference (optional)
-    @Column
+    @Column(columnDefinition = "CHAR(36)")
     private UUID flashSaleId;
 
     // Navigation properties
@@ -207,17 +207,4 @@ public class Order extends BaseEntity {
     public String toString() {
         return "Order " + orderNumber;
     }
-}
-
-/**
- * Order status enumeration
- */
-enum OrderStatus {
-    PENDING,
-    CONFIRMED,
-    PROCESSING,
-    SHIPPED,
-    DELIVERED,
-    CANCELLED,
-    REFUNDED
 }

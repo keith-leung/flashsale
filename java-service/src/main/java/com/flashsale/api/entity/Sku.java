@@ -30,7 +30,7 @@ public class Sku extends BaseEntity {
     private String name;
 
     @NotNull
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "CHAR(36)")
     private UUID spuId;
 
     @NotNull
