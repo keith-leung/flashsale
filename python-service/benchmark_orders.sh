@@ -51,9 +51,9 @@ echo ""
 
 # Check if server is responding
 echo "Checking server status..."
-HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/health" || echo "000")
+HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000/health" || echo "000")
 if [ "$HEALTH_CHECK" != "200" ]; then
-    echo "WARNING: Server is not responding at http://localhost:8080/health"
+    echo "WARNING: Server is not responding at http://localhost:8000/health"
     echo ""
     echo "Start the server with:"
     echo "  ./START_SERVER_OPTIMIZED.sh"

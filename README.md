@@ -303,7 +303,13 @@ This "chatty" design explains why:
 
 **The faster the framework, the more database latency dominates.**
 
-## 🚀 Quick Start - Production Setup
+## 🎯 Project Goal
+
+The ultimate destination is to **optimize order flash sale performance to approach the raw throughput of the `/health` endpoint**. We achieve this by experimenting with different architectural variants (e.g., caching strategies, async processing) and measuring the "performance gap" between raw framework overhead and complex business logic.
+
+## 🚀 Manual Reproduction Procedure (Quick Start)
+
+Follow these phases strictly to reproduce the baseline results and verify the environment.
 
 ### Prerequisites
 
@@ -325,73 +331,102 @@ podman-compose up -d
 # Verify containers are running
 podman ps
 
-# Check service health
+# Check service health (Basic Connectivity)
 curl http://localhost:8000/health  # Python
 curl http://localhost:8081/health  # Java
 curl http://localhost:8082/health  # C#
 curl -k https://localhost:8443/python/health  # Via Nginx
 ```
 
-### Generate Test Data
+### Phase 1: Environment & Data Setup
+
+1. **Generate Test Data (Critical Step)**
+   Creates 2,500 SKUs with 25M total stock.
+   ```bash
+   podman exec flash-python python /app/setup_test_data.py 500 5 10000
+   ```
+
+2. **Extract SKU IDs**
+   Required for the benchmark scripts to know which items to purchase.
+   ```bash
+   podman cp flash-python:/tmp/stress_test_sku_ids.txt /tmp/stress_test_sku_ids.txt
+   ```
+
+### Phase 2: Verify Codebase Integrity
+
+Run the Python unit tests to ensure business logic (Inventory, Orders, SKU) is correct before stressing the system. This serves as the "Source of Truth" for logic correctness.
 
 ```bash
-# Generate 500 SPUs with 2,500 SKUs (10,000 stock each)
-podman exec flash-python python /app/setup_test_data.py 500 5 10000
-
-# Copy SKU IDs file for benchmarks
-podman cp flash-python:/tmp/stress_test_sku_ids.txt /tmp/stress_test_sku_ids.txt
+podman exec flash-python python -m pytest
+# Expected: ===== 29 passed in X.Xs =====
 ```
 
-### Run Complete Benchmark Suite
+### Phase 3: Raw Framework Performance (Direct /health)
 
-#### 1. Health Check Benchmarks (Direct)
+Measure maximum throughput with minimal logic to establish the theoretical ceiling.
+
+1. **Python (Direct):** ~54k req/s
+   ```bash
+   bash python-service/benchmark_health.sh http://localhost:8000/health
+   ```
+
+2. **Java (Direct):** ~195k req/s
+   ```bash
+   bash java-service/test_health.sh
+   ```
+
+3. **C# (Direct):** ~395k req/s
+   ```bash
+   bash csharp-service/test_health.sh
+   ```
+
+### Phase 4: Order Processing (Direct Access)
+
+Measure application logic + DB performance (bypassing load balancer). This is the baseline "business logic" performance.
+
+1. **Python (Direct):** ~1,460 req/s
+   ```bash
+   bash python-service/benchmark_orders.sh http://localhost:8000/api/v1/orders
+   ```
+
+2. **Java (Direct):** ~3,800 req/s
+   ```bash
+   cd java-service && bash benchmark_orders.sh http://localhost:8081/api/v1/orders
+   ```
+
+3. **C# (Direct):** ~5,700 req/s
+   ```bash
+   cd csharp-service && bash benchmark_orders.sh http://localhost:8082/api/v1/orders
+   ```
+
+### Phase 5: "Real Client" Benchmarks (Via Nginx)
+
+Simulate external clients hitting the unified gateway (SSL termination + routing).
+
+**A. Health Checks via Nginx**
+
+1. **Python via Nginx:**
+   ```bash
+   bash python-service/benchmark_health.sh https://localhost:8443/python/health
+   ```
+
+2. **Java via Nginx:**
+   ```bash
+   wrk -t12 -c400 -d30s --latency https://localhost:8443/java/health
+   ```
+
+3. **C# via Nginx:**
+   ```bash
+   wrk -t12 -c400 -d30s --latency https://localhost:8443/csharp/health
+   ```
+
+**B. Order Processing via Nginx (Round-Robin)**
+
+Tests aggregate performance of all services mixed together.
 
 ```bash
-# Python
-wrk -t12 -c100 -d30s http://localhost:8000/health
-
-# Java
-wrk -t12 -c100 -d30s http://localhost:8081/health
-
-# C#
-wrk -t12 -c100 -d30s http://localhost:8082/health
-```
-
-#### 2. Health Check Benchmarks (Via Nginx)
-
-```bash
-# Python via Nginx
-wrk -t12 -c100 -d30s -k https://localhost:8443/python/health
-
-# Java via Nginx
-wrk -t12 -c100 -d30s -k https://localhost:8443/java/health
-
-# C# via Nginx
-wrk -t12 -c100 -d30s -k https://localhost:8443/csharp/health
-```
-
-#### 3. Order API Benchmarks (Direct)
-
-```bash
-# Python
-wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
-  http://localhost:8000/api/v1/orders
-
-# Java
-wrk -t12 -c100 -d30s -s java-service/wrk_order_script.lua \
-  http://localhost:8081/api/v1/orders
-
-# C#
-wrk -t12 -c100 -d30s -s csharp-service/wrk_order_script.lua \
-  http://localhost:8082/api/v1/orders
-```
-
-#### 4. Order API Benchmark (Load Balanced)
-
-```bash
-# Round-robin across all services
-wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
-  https://localhost:8443/api/v1/orders
+bash python-service/benchmark_orders.sh https://localhost:8443/api/v1/orders
+# Expected: ~2,100 req/s (average of all three + Nginx overhead)
 ```
 
 ### Manual Order Creation (Testing)
@@ -402,32 +437,6 @@ SKU_ID=$(head -1 /tmp/stress_test_sku_ids.txt)
 
 # Create order via Python
 curl -X POST http://localhost:8000/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"customer_email\": \"test@example.com\",
-    \"customer_name\": \"Test User\",
-    \"currency\": \"USD\",
-    \"line_items\": [{
-      \"sku_id\": \"$SKU_ID\",
-      \"quantity\": 2
-    }]
-  }"
-
-# Create order via Java
-curl -X POST http://localhost:8081/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"customer_email\": \"test@example.com\",
-    \"customer_name\": \"Test User\",
-    \"currency\": \"USD\",
-    \"line_items\": [{
-      \"sku_id\": \"$SKU_ID\",
-      \"quantity\": 2
-    }]
-  }"
-
-# Create order via C#
-curl -X POST http://localhost:8082/api/v1/orders \
   -H "Content-Type: application/json" \
   -d "{
     \"customer_email\": \"test@example.com\",
