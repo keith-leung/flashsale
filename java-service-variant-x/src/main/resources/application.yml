@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: flashsale-service-variant-x
+
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3308/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: syracuse
+    password: Orange_315_Forever!
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 100
+      minimum-idle: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: FlashSaleHikariPool
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        type:
+          preferred_uuid_jdbc_type: CHAR
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6381
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 10
+          max-wait: 2000ms
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+server:
+  port: 8101
+  tomcat:
+    threads:
+      max: 300
+      min-spare: 50
+    max-connections: 10000
+    accept-count: 200
+    connection-timeout: 20000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.flashsale.api: INFO
+    org.springframework.cache: DEBUG
+    com.flashsale.api.service.RedisCacheService: DEBUG
+    com.flashsale.api.service.OrderServiceVariantX: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method

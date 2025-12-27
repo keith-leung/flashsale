@@ -1,120 +1,121 @@
 # Flash Sale Microservices Platform
 
-A **complete flash sale e-commerce platform** with identical functionality implemented in **Python, C#, and Java**. Designed as a foundation for building different flash sale performance optimizations and testing various architectural approaches.
+A complete flash sale e-commerce platform with identical functionality implemented in **Python, C#, and Java**. Designed for performance testing and architectural comparison.
 
-## Quick Start - Dockerized Setup (Variant Y)
+## Latest Benchmark Results (Static IP Network - Dec 27, 2025)
 
-All services are containerized and ready to run with Podman/Docker:
+**Environment:** Podman containers with static IP allocation (10.88.0.0/16 subnet)
+- **CPU:** Intel Core Ultra 9 275HX - P-cores (0-7) for middleware, E-cores (8-23) for apps
+- **Memory:** 16GB MariaDB, 2GB Redis, 4GB per application
+- **Test Data:** 500 SPUs, 2,500 SKUs, 25M total stock
+- **Load Test:** wrk -t12 -c100 -d30s
+
+### Variant Y Results (Baseline Architecture)
+
+| Service | Throughput | Latency (avg) | Total Requests | vs Python |
+|---------|-----------|---------------|----------------|-----------|
+| **C# (ASP.NET Core)** | **4,663 req/s** | **25.15ms** | 152,422 | **3.6× faster** |
+| **Java (Spring Boot)** | **3,592 req/s** | **26.63ms** | 116,110 | **2.8× faster** |
+| **Python (FastAPI)** | 1,297 req/s | 113.97ms | 39,840 | baseline |
+
+**Key Findings:**
+- C# demonstrates best performance for high-throughput flash sales
+- All services are database I/O-bound (4-7 queries per order)
+- Static IP networking resolves Podman DNS reliability issues
+- 100% success rates across all three implementations
+
+**Production Capacity (10K orders/sec target):**
+- C# requires 2-3 instances
+- Java requires 3-4 instances
+- Python requires 8-10 instances
+
+## Quick Start - Dockerized Setup
 
 ```bash
-# Start all services
+# Start Variant Y (baseline) with static IP network
 podman-compose -f docker-compose-variant-y.yml up -d
+
+# Verify static IPs
+podman inspect flash-mariadb flash-python flash-java flash-csharp | grep IPAddress
 
 # Check service health
 curl http://localhost:8000/health  # Python
 curl http://localhost:8081/health  # Java
 curl http://localhost:8082/health  # C#
-curl -k https://localhost:8443/health  # Nginx Load Balancer
+
+# Generate test data
+podman exec flash-python python /app/setup_test_data.py 500 5 10000
+
+# Copy SKU IDs for benchmarks
+podman cp flash-python:/tmp/stress_test_sku_ids.txt /tmp/stress_test_sku_ids.txt
 
 # Run benchmarks
-wrk -t12 -c400 -d30s http://localhost:8000/health  # Python direct
-wrk -t12 -c400 -d30s http://localhost:8081/health  # Java direct
-wrk -t12 -c400 -d30s http://localhost:8082/health  # C# direct
-wrk -t12 -c400 -d30s -k https://localhost:8443/health  # Load balanced
+wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua http://localhost:8000/api/v1/orders
+wrk -t12 -c100 -d30s -s java-service/wrk_order_script.lua http://localhost:8081/api/v1/orders
+wrk -t12 -c100 -d30s -s csharp-service/wrk_order_script.lua http://localhost:8082/api/v1/orders
 ```
 
-Services:
-- **MariaDB**: localhost:3307 (inside: mariadb:3306)
-- **Redis**: Internal only (flash-redis:6379)
-- **Python**: localhost:8000
-- **Java**: localhost:8081
-- **C#**: localhost:8082
-- **Nginx LB**: localhost:8443 (HTTPS)
+### Network Architecture
+
+**Static IP Allocation (10.88.0.0/16 subnet):**
+- MariaDB: 10.88.0.2:3306
+- Redis: 10.88.0.3:6379
+- Nginx: 10.88.0.4:443
+- Python: 10.88.0.5:8000 (host: 8000)
+- Java: 10.88.0.6:8080 (host: 8081)
+- C#: 10.88.0.7:80 (host: 8082)
+
+**Why Static IPs:** Podman 3.4.4 has unreliable DNS resolution in container networking. Static IP allocation ensures consistent connectivity.
+
+### CPU Allocation Strategy
+
+**Hardware:** Intel Core Ultra 9 275HX (8 P-cores + 16 E-cores)
+
+**P-Cores (0-7) - Middleware:**
+- MariaDB: 8 cores, 16GB RAM
+- Redis: 2 cores, 2GB RAM
+- Nginx: 1 core, 512MB RAM
+
+**E-Cores (8-23) - Applications:**
+- Python: 4 cores, 4GB RAM
+- Java: 4 cores, 4GB RAM
+- C#: 4 cores, 4GB RAM
+
+**Rationale:** Middleware (database, cache, load balancer) requires P-cores for maximum I/O throughput. Applications are I/O-bound and run efficiently on E-cores.
 
 ## Overview
 
-This project provides **three independent microservices** implementing flash sale functionality:
+Three independent microservices implementing flash sale functionality:
 
-1. **Python Service** - FastAPI + SQLAlchemy + MariaDB (InnoDB) + Redis
-2. **C# Service** - ASP.NET Core + Entity Framework Core + MariaDB (InnoDB) + Redis  
-3. **Java Service** - Spring Boot + JPA + MariaDB (InnoDB) + Redis
+1. **Python Service** - FastAPI + SQLAlchemy + MariaDB + Redis
+2. **C# Service** - ASP.NET Core + EF Core + MariaDB + Redis
+3. **Java Service** - Spring Boot + JPA + MariaDB + Redis
 
 ## Core Features
 
-All three services implement the same core functionality:
+### Product Management
+- **SPU (Standard Product Unit)** - Product catalog with slug-based identification
+- **SKU (Stock Keeping Unit)** - Product variants with pricing and inventory
 
-### 📦 **SPU (Standard Product Unit) Management**
-- Create and manage product concepts
-- Unique slug-based identification
-- Product metadata and descriptions
-
-### 🏷️ **SKU (Stock Keeping Unit) Management**
-- Product variants with unique SKU codes
-- Pricing and cost management
-- Weight and inventory tracking
-
-### ⚡ **Flash Sale Events**
-- Time-based flash sales with `start_time` and `end_time`
-- `total_sale_limit` for maximum items available
-- `max_quantity_per_customer` limits
+### Flash Sale Events
+- Time-based sales with start/end times
+- Total sale limits and per-customer quantity restrictions
 - Real-time status updates (Scheduled → Active → Ended)
 - Automatic inventory management
 
-### 📊 **Inventory Management**
+### Order Processing
+- Full ACID transaction support
+- Inventory reservation and fulfillment
+- Multi-item orders with line items
 - Real-time stock tracking
-- Reserved quantity management
-- Configurable negative stock policies
-- Inventory adjustments and auditing
 
-## Architecture Principles (Inspired by Saleor)
+## Architecture Principles
 
-### 🎯 **Domain-Driven Design**
-- Clear separation of concerns
-- Entity-based modeling
-- Business logic encapsulation
-
-### 🚀 **API-First Architecture**
-- RESTful APIs with comprehensive documentation
-- Structured DTOs/schemas for data transfer
-- Validation at API boundaries
-
-### 📈 **Scalability & Performance**
-- Redis caching for high-performance reads
-- Async operations where possible
-- Background tasks for status updates
-
-### 🛡️ **Data Integrity**
-- Database constraints and indexes
-- Optimistic concurrency handling
-- Transaction management
-
-## Important Project Conventions
-
-To ensure consistency and prevent common issues, all developers and LLM agents must adhere to the following conventions:
-
-### 1. ID Generation (Snowflake IDs)
-
-All IDs in this project are **time-based, incrementing UUID-style identifiers**, similar to Twitter's Snowflake IDs. They are not random UUIDs. This means that as time progresses, the IDs should increase. This is a critical architectural aspect of the system.
-
-### 2. Running Tests and Programs
-
-LLM agents **must not** run tests or execute the application. The project owner or developer is responsible for running all programs and tests. The role of the agent is to analyze code, suggest changes, and fix bugs, but not to execute the code.
-
-### 3. Database Schema Migrations
-
-This project follows a **database-first approach**. All database schema changes **must be done manually** through SQL scripts. **Code-first migrations are strictly forbidden.** This is to ensure that all schema changes are deliberate, version-controlled, and approved, as would be the case in a production environment managed by a DevOps team.
-
-### 4. Proactive Bug Resolution
-
-When a bug is identified, do not just fix the single instance. Actively scrutinize the codebase to determine if the same underlying error exists in other parts of the application. Draw inferences from the root cause and apply the fix to all similar cases. This proactive approach ensures a more robust and reliable codebase.
-
-### 5. Python/FastAPI Implementation Patterns
-
-When implementing new endpoints or entities in the Python service, adhere to the following patterns to avoid common pitfalls:
-
-*   **UUIDs in Database Queries**: When filtering by a UUID column (e.g., `id`, `spu_id`), always convert the `UUID` object to a string (`str(uuid_object)`) before passing it to the SQLAlchemy filter. This is necessary because the database stores UUIDs as `CHAR(36)` with hyphens, and the database driver may not correctly format `UUID` objects.
-
-*   **Eagerly Load Relationships for Responses**: In an asynchronous context, SQLAlchemy's lazy loading is disabled. If an endpoint's response model includes a relationship (e.g., an order with its line items), you must explicitly load that relationship *before* returning the object from the endpoint. Use `selectinload` in your queries to prevent `500 Internal Server Error` during response serialization. For example, when returning an `Order` with its `line_items`, query it like this: `select(Order).options(selectinload(Order.line_items)).filter(...)`.
+- **Domain-Driven Design** - Clear separation of concerns
+- **API-First** - RESTful APIs with OpenAPI/Swagger documentation
+- **Database-First** - Manual SQL schema migrations (no code-first)
+- **Scalability** - Redis caching, async operations, background tasks
+- **Data Integrity** - Database constraints, optimistic concurrency, transactions
 
 ## Service Comparison
 
@@ -122,590 +123,146 @@ When implementing new endpoints or entities in the Python service, adhere to the
 |---------|------------------|-------------------|-------------------|
 | **Language** | Python 3.11+ | C# .NET 8 | Java 21+ |
 | **Web Framework** | FastAPI | ASP.NET Core | Spring Boot 3.2 |
-| **ORM** | SQLAlchemy | Entity Framework Core | Spring Data JPA |
+| **ORM** | SQLAlchemy | EF Core | Spring Data JPA |
 | **Database** | MariaDB (InnoDB) | MariaDB (InnoDB) | MariaDB (InnoDB) |
 | **Caching** | Redis | Redis | Redis |
-| **Documentation** | OpenAPI/Swagger | Swagger | SpringDoc OpenAPI |
-| **Background Tasks** | Celery | Hosted Services | @Scheduled |
-| **Object Mapping** | Pydantic | AutoMapper | MapStruct |
+| **Documentation** | OpenAPI/Swagger | Swagger | SpringDoc |
 
-## Performance Comparison & Capacity Planning
+## Important Conventions
 
-### Why Different Services for Different Load Profiles
+### 1. ID Generation (Snowflake-style)
+All IDs are **time-based, incrementing UUID-style identifiers**. They are NOT random UUIDs - IDs increase over time.
 
-Based on comprehensive benchmarking of `/health` endpoints across all three services, we observed significant performance differences that directly inform capacity planning and inventory allocation strategies:
+### 2. Database Schema Migrations
+**Database-first approach** - All schema changes via manual SQL scripts. Code-first migrations are forbidden.
 
-**Test Environment:**
-- **Hardware**: Intel Core Ultra 9 275HX (24 cores), 64GB RAM
-- **OS**: WSL2 on Windows
-- **Load Test**: wrk with 12 threads, 400 connections, 30 seconds
-- **All services**: Single instance, shared database (MariaDB @ 127.0.0.1:3306)
+### 3. Python/FastAPI Patterns
+- **UUIDs in Queries**: Convert UUID objects to strings (`str(uuid_object)`) before database queries
+- **Eager Loading**: Use `selectinload()` for relationships in async contexts to prevent lazy loading errors
 
-**Raw HTTP Performance (/health endpoint - no database):**
-
-| Service | Native (req/s) | Dockerized (req/s) | Docker Impact | Relative to Python |
-|---------|----------------|--------------------|--------------|--------------------|
-| **C# (ASP.NET Core)** | **996,491** | **427,201** | -57% | 7.5× faster |
-| **Java (Spring Boot)** | **172,068** | **203,693** | +18% ⬆ | 3.6× faster |
-| **Python (FastAPI)** | **56,250** | **57,032** | +1.4% ⬆ | Baseline (1.0×) |
-
-**Dockerization Impact:**
-- **Python**: Essentially identical (+1.4%) - excellent containerization
-- **Java**: 18% faster in containers - JVM warmup optimization
-- **C#**: 57% slower in containers - .NET native performance advantage reduced
-
-**Key Findings:**
-
-1. **C# Dominates Raw Throughput**
-   - Nearly 1M requests/sec sustained throughput
-   - Excellent for handling flash sale traffic spikes
-   - .NET runtime optimization provides consistent low latency (avg 756μs)
-
-2. **Java Provides Balanced Performance**
-   - 3× faster than Python, stable under load
-   - JVM JIT compilation delivers predictable performance
-   - Good choice for business-critical services
-
-3. **Python Optimized for Developer Productivity**
-   - Fastest development and iteration cycles
-   - Still delivers 56K req/s (sufficient for many workloads)
-   - Python GIL limits throughput vs compiled languages
-
-**Capacity Planning Implications:**
-
-For a target of **100,000 requests/sec** across the platform:
-
-| Service | Instances Needed | Inventory Allocation Strategy |
-|---------|------------------|-------------------------------|
-| **C#** | 1 instance (996K/s) | Allocate 60-70% of total inventory - handles flash sale peaks |
-| **Java** | 1 instance (172K/s) | Allocate 20-25% of total inventory - steady-state operations |
-| **Python** | 2 instances (56K/s each) | Allocate 10-15% of total inventory - development/testing |
-
-**Why This Matters for Flash Sales:**
-
-During high-traffic flash sale events (e.g., limited quantity drops, time-sensitive promotions):
-- **C# instances** handle the initial traffic surge (first 60 seconds)
-- **Java instances** provide reliable secondary capacity
-- **Python instances** handle overflow and provide deployment flexibility
-
-### Order API Performance (Database Transactions)
-
-#### Order Procedure Analysis
-The order procedure is consistent across all three services and is designed to be "chatty" with the database (multiple round-trips) to simulate a realistic, complex transactional workload. This explains why database latency is the primary bottleneck.
-
-**1. Python Implementation (`app/api/endpoints/orders.py`)**
-```python
-# 1. Insert Order Header (DB Interaction #1)
-order = Order(order_number=order_number, ...)
-db.add(order)
-await db.flush()  # Flush to get the order ID immediately
-
-# 2. Loop through Line Items
-for item_data in order_data.line_items:
-    # Select SKU & Inventory (DB Interaction #2...N+1)
-    # Executes a SELECT query for EVERY item in the loop
-    result = await db.execute(select(SKU)...filter(SKU.id == str(item_data.sku_id)))
-    sku = result.scalar_one_or_none()
-    
-    # Reserve inventory (Modified in memory)
-    sku.inventory.reserve_quantity(item_data.quantity)
-    
-    # Create Line Item (Added to session)
-    line_item = OrderLineItem(...)
-    line_items_to_add.append(line_item)
-
-# 3. Commit Transaction (DB Interaction Final)
-# Triggers batch UPDATEs for inventory and batch INSERTs for line items
-db.add_all(line_items_to_add)
-await db.commit()
-```
-
-**2. Java Implementation (`OrderService.java`)**
-```java
-// 1. Insert Order Header (DB Interaction #1)
-order = orderRepository.save(order); // Explicit Insert to get ID
-
-// 2. Loop through Line Items
-for (OrderLineItemCreateDto itemDto : createDto.getLineItems()) {
-    // Select SKU & Inventory (DB Interaction #2...N+1)
-    Sku sku = skuRepository.findByIdWithInventoryAndSpu(itemDto.getSkuId())...;
-
-    // Reserve inventory
-    sku.getInventory().reserveQuantity(itemDto.getQuantity());
-    
-    // Explicit Save/Update per item (Potential DB Interaction)
-    inventoryRepository.save(sku.getInventory()); 
-    orderLineItemRepository.save(lineItem);
-}
-
-// 3. Final Update (DB Interaction Final)
-orderRepository.save(order); // Update totals
-```
-
-**3. C# Implementation (`OrderService.cs`)**
-```csharp
-// 1. Insert Order Header (DB Interaction #1)
-_context.Orders.Add(order);
-await _context.SaveChangesAsync(); // Explicit Save to get ID
-
-// 2. Loop through Line Items
-foreach (var itemDto in dto.LineItems)
-{
-    // Select SKU & Inventory (DB Interaction #2...N+1)
-    var sku = await _context.Skus...FirstOrDefaultAsync(...);
-
-    // Reserve inventory (Tracked by EF Core Change Tracker)
-    sku.Inventory.ReserveQuantity(itemDto.Quantity);
-    _context.OrderLineItems.Add(new OrderLineItem { ... });
-}
-
-// 3. Commit Transaction (DB Interaction Final)
-// Executes batch UPDATEs and INSERTs
-await _context.SaveChangesAsync();
-await transaction.CommitAsync();
-```
-
-**Conclusion**: A single order with 3 items triggers **at least 5+ separate database interactions** (1 Insert Order + 3 Selects + 1 or more Updates/Inserts). This confirms the "4-7 database operations per order" metric.
-
-**Test Configuration:**
-- **Test Data**: 500 SKUs with 10,000 stock each (5M total inventory)
-- **Load Test**: wrk with 12 threads, 100 connections, 30 seconds
-- **Operations**: Full ACID transactions (orders + line_items + inventory updates)
-- **Database**: Shared MariaDB instance (127.0.0.1:3306)
-- **Status**: ✅ All three services fully functional with wrk stress tests
-
-**Measured Results:**
-
-| Service | Throughput | Latency (avg) | Database Writes | Success Rate |
-|---------|-----------|---------------|-----------------|--------------|
-| **Python (FastAPI)** | 1,590 req/s | 65.96ms | **47,852 orders** | 99.98% |
-| **Java (Spring Boot)** | 2,074 req/s | 51.33ms | **51,264 orders** | 83.8% |
-| **C# (ASP.NET Core)** | 3,780 req/s | 33.79ms | **94,549 orders** | 84.6% |
-
-**Actual Order Creation Throughput:**
-
-| Service | Orders/sec | vs Python | vs Java |
-|---------|------------|-----------|---------|
-| **Python** | 1,595 orders/sec | baseline | - |
-| **Java** | 1,742 orders/sec | +9.2% | baseline |
-| **C#** | 3,202 orders/sec | +100.7% (2×) | +83.9% |
-
-**Key Findings:**
-
-1. **Database is the Bottleneck (Not Application Code)**
-   - Performance gap narrows from 10-17× (/health) to just 2× (orders)
-   - C# loses 311× performance, Java loses 99×, Python loses 60×
-   - Connection pool exhaustion observed across all services
-   - Higher throughput services show more DB-related failures
-
-2. **All Services Now Fully Compatible**
-   - Fixed JSON property naming (snake_case) in Java and C#
-   - All services accept wrk Lua script requests
-   - Shared database schema with identical column names and types
-   - Load balancer ready with zero conflicts
-
-3. **Performance vs Reliability Trade-off**
-   - Python: Lower throughput (1,595/s) but highest success rate (99.98%)
-   - Java: Medium throughput (1,742/s) with 83.8% success
-   - C#: Highest throughput (3,202/s) with 84.6% success
-   - Failures correlate with database connection limits
-
-**Production Capacity (Proven Performance):**
-
-| Service | Proven Throughput | Instances for 10K orders/sec |
-|---------|-------------------|------------------------------|
-| **Python** | 1,600 orders/sec | 7 instances |
-| **Java** | 1,750 orders/sec | 6 instances |
-| **C#** | 3,200 orders/sec | 3-4 instances |
-
-*Note: Database optimization required for sustained 10K+ orders/sec (increase max_connections, optimize pools)*
-
-### Dockerized Order API Performance (Podman)
-
-**Test Configuration:**
-- **Environment**: Podman containers with docker-compose-variant-y.yml
-- **Test Data**: 500 SKUs with 10,000 stock each
-- **Load Test**: wrk with 12 threads, 100 connections, 30 seconds
-- **Database**: MariaDB in container (host:3307 → container:3306)
-- **All services**: Running in isolated containers on shared network
-
-**Measured Results:**
-
-| Service | Throughput (req/s) | Latency (avg) | Total Requests | Success Rate |
-|---------|-------------------|---------------|----------------|--------------|
-| **C# (ASP.NET Core)** | **4,965** | 75.03ms | 158,714 | 96.1% |
-| **Java (Spring Boot)** | **3,539** | 49.24ms | 110,303 | 96.2% |
-| **Python (FastAPI)** | **1,484** | ~67ms | 44,654 | 96.9% |
-
-**Performance Comparison (Dockerized vs Native):**
-
-| Service | Native Orders/sec | Docker Orders/sec | Docker Impact | vs Python |
-|---------|------------------|-------------------|--------------|-----------|
-| **C#** | 3,202 | 4,965 | +55% ⬆ | 3.3× faster |
-| **Java** | 1,742 | 3,539 | +103% ⬆ | 2.4× faster |
-| **Python** | 1,595 | 1,484 | -7% | Baseline |
-
-**Key Findings:**
-
-1. **Containerization Improves Order Performance**
-   - Java: 103% faster in containers (1,742 → 3,539 req/s)
-   - C#: 55% faster in containers (3,202 → 4,965 req/s)
-   - Python: 7% slower in containers (1,595 → 1,484 req/s)
-   - Opposite trend from /health endpoints due to database isolation
-
-2. **Database Connection Pooling Benefits**
-   - Containerized services have dedicated database connections
-   - Network isolation reduces connection conflicts
-   - Better connection pool management in container environment
-
-3. **Consistent Success Rates**
-   - All services: 96-97% success rate (improved from native 83-99%)
-   - Fewer database connection errors with proper container networking
-   - Container resource limits prevent connection pool exhaustion
-
-**Database Bottleneck Evidence:**
-
-The performance reduction from /health to Order API proves database transactions dominate:
-- Python: 95K → 1.6K req/s (60× slower)
-- Java: 172K → 1.7K req/s (99× slower)
-- C#: 996K → 3.2K req/s (311× slower)
-
-The faster the framework, the more the database bottlenecks it. This confirms database I/O and ACID transaction commits as the limiting factor, not application code.
-
-**Running Order API Stress Tests:**
-
-```bash
-# Step 1: Generate test data (run once)
-cd python-service
-python setup_test_data.py 100 5 10000
-
-# Step 2: Test Python
-cd python-service
-./START_SERVER_OPTIMIZED.sh
-./benchmark_orders.sh
-
-# Step 3: Test Java
-cd java-service
-mvn spring-boot:run
-# In another terminal:
-cd java-service
-wrk -t12 -c100 -d30s -s wrk_order_script.lua http://localhost:8081/api/v1/orders
-
-# Step 4: Test C#
-cd csharp-service
-dotnet run --urls "http://0.0.0.0:8082"
-# In another terminal:
-cd csharp-service
-wrk -t12 -c100 -d30s -s wrk_order_script.lua http://localhost:8082/api/v1/orders
-```
-
-**Database Schema Compatibility:**
-- ✅ All services use snake_case JSON properties (customer_email, sku_id)
-- ✅ All services use snake_case database columns (order_number, customer_email, created_at)
-- ✅ All services use CHAR(36) UUIDs with hyphens
-- ✅ All services use identical table names and foreign keys
-- ✅ **Load balancer ready**: Clients cannot distinguish which service handled their request
-
-## Quick Start
-
-### Prerequisites
-
-Before running the services, ensure you have:
-
-**Database & Cache:**
-- **MariaDB 10.6.22+** running on `127.0.0.1:3306`
-  - Database: `orange315`
-  - User: `syracuse`
-  - Password: `Orange_315_Forever!`
-- **Redis 6.0.16+** running on `127.0.0.1:6380`
-
-**Language Runtimes:**
-- **Python 3.11+** (for Python service)
-- **Java 21+** (for Java service)
-- **.NET 8 SDK** (for C# service)
-
-**Tools:**
-- **wrk** - HTTP benchmarking tool (for performance testing)
-- **Maven** - Java build tool
-- **Git** - Version control
-
-### Service Ports
-
-| Service | Port | Health Check | API Docs |
-|---------|------|--------------|----------|
-| **Python** | 8000 | http://localhost:8000/health | http://localhost:8000/docs |
-| **Java** | 8081 | http://localhost:8081/health | http://localhost:8081/swagger-ui.html |
-| **C#** | 8082 | http://localhost:8082/health | http://localhost:8082/swagger |
-
-### Starting Services
-
-All three services share the same database and can run simultaneously.
-
-#### Python Service
-```bash
-cd python-service
-./START_SERVER_OPTIMIZED.sh
-# Or manually:
-# pip install -r requirements.txt
-# uvicorn app.main:app --reload
-```
-
-#### Java Service
-```bash
-cd java-service
-./START_SERVER.sh
-# Or manually:
-# mvn spring-boot:run
-```
-
-#### C# Service
-```bash
-cd csharp-service
-./START_SERVER.sh
-# Or manually:
-# dotnet run --urls "http://0.0.0.0:8082"
-```
-
-### Testing Health Endpoints
-
-```bash
-# Test all services at once
-curl http://localhost:8000/health  # Python - should return "200 OK"
-curl http://localhost:8081/health  # Java - should return "200 OK"
-curl http://localhost:8082/health  # C# - should return "200 OK"
-```
-
-### Testing Order API
-
-All services expose the same REST API endpoints:
-
-**Common Endpoints:**
-- `POST /api/v1/orders` - Create order
-- `GET /api/v1/orders` - List orders
-- `GET /api/v1/orders/{id}` - Get order by ID
-
-**Example - Create Order:**
-```bash
-# Get a test SKU ID (after running setup_test_data.py)
-SKU_ID=$(head -1 /tmp/stress_test_sku_ids.txt)
-
-# Python
-curl -X POST http://localhost:8000/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"customer_email\": \"test@example.com\",
-    \"customer_name\": \"Test User\",
-    \"currency\": \"USD\",
-    \"line_items\": [{
-      \"sku_id\": \"$SKU_ID\",
-      \"quantity\": 2
-    }]
-  }"
-
-# Java
-curl -X POST http://localhost:8081/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"customer_email\": \"test@example.com\",
-    \"customer_name\": \"Test User\",
-    \"currency\": \"USD\",
-    \"line_items\": [{
-      \"sku_id\": \"$SKU_ID\",
-      \"quantity\": 2
-    }]
-  }"
-
-# C#
-curl -X POST http://localhost:8082/api/v1/orders \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"customer_email\": \"test@example.com\",
-    \"customer_name\": \"Test User\",
-    \"currency\": \"USD\",
-    \"line_items\": [{
-      \"sku_id\": \"$SKU_ID\",
-      \"quantity\": 2
-    }]
-  }"
-```
-
-### Database Connection
-
-All services connect to the same MariaDB instance:
-- **Host:** 127.0.0.1:3306
-- **Database:** orange315
-- **User:** syracuse
-- **Password:** Orange_315_Forever!
-
-You can verify orders created by any service:
-```bash
-mysql -h 127.0.0.1 -P 3306 -u syracuse -pOrange_315_Forever! -D orange315 \
-  -e "SELECT id, order_number, customer_email, total_amount, status FROM orders ORDER BY created_at DESC LIMIT 5;"
-```
-
-#### Java Service
-```bash
-cd java-service
-mvn clean compile
-mvn spring-boot:run
-# API: http://localhost:8080/swagger-ui.html
-```
+### 4. Proactive Bug Resolution
+When fixing a bug, scan the entire codebase for similar patterns and apply the fix everywhere.
 
 ## Database Schema
 
-All services implement the same logical data model:
-
 **Core Models:**
-- **SPU (Standard Product Unit)**: Product catalog entries
-- **SKU (Stock Keeping Unit)**: Product variants with pricing  
+- **SPU**: Product catalog entries
+- **SKU**: Product variants with pricing
 - **Inventory**: Stock levels and reservations
-- **Flash Sale Events**: Time-limited promotional campaigns
-- **Orders**: Customer purchase records (regular + flash sale)
-- **Order Line Items**: Individual items within orders
-- **Payments**: Payment transaction records
+- **Flash Sale Events**: Time-limited promotions
+- **Orders**: Customer purchases
+- **Order Line Items**: Items within orders
+- **Payments**: Payment transactions
 
-**All IDs**: UUID format (CHAR(36)) for distributed generation and cross-service compatibility
+**All IDs**: UUID format (CHAR(36)) for distributed generation
 
 ## API Endpoints
 
-All services expose the same REST API structure:
+All services expose identical REST APIs:
 
 ### SPU Endpoints
 - `GET /api/v1/spus` - List SPUs
 - `POST /api/v1/spus` - Create SPU
-- `GET /api/v1/spus/{id}` - Get SPU by ID
+- `GET /api/v1/spus/{id}` - Get SPU
 - `PUT /api/v1/spus/{id}` - Update SPU
 - `DELETE /api/v1/spus/{id}` - Delete SPU
 
 ### SKU Endpoints
 - `GET /api/v1/skus` - List SKUs
 - `POST /api/v1/skus` - Create SKU
-- `GET /api/v1/skus/{id}` - Get SKU by ID
+- `GET /api/v1/skus/{id}` - Get SKU
 - `PUT /api/v1/skus/{id}` - Update SKU
 - `DELETE /api/v1/skus/{id}` - Delete SKU
 
 ### Flash Sale Endpoints
-- `GET /api/v1/flash-sales` - List flash sale events
-- `POST /api/v1/flash-sales` - Create flash sale event
-- `GET /api/v1/flash-sales/{id}` - Get flash sale by ID
+- `GET /api/v1/flash-sales` - List flash sales
+- `POST /api/v1/flash-sales` - Create flash sale
+- `GET /api/v1/flash-sales/{id}` - Get flash sale
 - `PUT /api/v1/flash-sales/{id}` - Update flash sale
-- `POST /api/v1/flash-sales/{id}/purchase` - Purchase from flash sale
+- `POST /api/v1/flash-sales/{id}/purchase` - Purchase from sale
 - `DELETE /api/v1/flash-sales/{id}` - Delete flash sale
 
+### Order Endpoints
+- `GET /api/v1/orders` - List orders
+- `POST /api/v1/orders` - Create order
+- `GET /api/v1/orders/{id}` - Get order
+
 ### Inventory Endpoints
-- `GET /api/v1/inventory/{sku_id}` - Get inventory for SKU
+- `GET /api/v1/inventory/{sku_id}` - Get inventory
 - `PUT /api/v1/inventory/{sku_id}` - Update inventory
-- `POST /api/v1/inventory/{sku_id}/adjust` - Adjust inventory quantity
-- `POST /api/v1/inventory/{sku_id}/reserve` - Reserve inventory
-- `POST /api/v1/inventory/{sku_id}/release` - Release reserved inventory
+- `POST /api/v1/inventory/{sku_id}/adjust` - Adjust quantity
+- `POST /api/v1/inventory/{sku_id}/reserve` - Reserve stock
+- `POST /api/v1/inventory/{sku_id}/release` - Release reserved stock
 
 ## Business Logic
 
 ### Flash Sale State Management
-Flash sales automatically transition through states:
 - **Scheduled** → **Active** (when current time >= start_time)
-- **Active** → **Ended** (when current time >= end_time OR sold_quantity >= total_sale_limit)
-- **Any State** → **Cancelled** (manual cancellation)
+- **Active** → **Ended** (when current time >= end_time OR sold >= limit)
+- **Any State** → **Cancelled** (manual)
 
 ### Inventory Management
-- **Available Quantity** = Total Quantity - Reserved Quantity
+- **Available Quantity** = Total - Reserved
 - **Reservation System** prevents overselling
-- **Fulfillment Process** reduces both reserved and total quantities
+- **Fulfillment** reduces both reserved and total quantities
 
 ### Concurrency Handling
-- Database-level constraints prevent duplicate slugs/SKU codes
+- Database-level constraints (unique slugs/SKU codes)
 - Optimistic locking for inventory updates
 - Transaction boundaries for multi-step operations
 
-## Technology Choices Rationale
+## Technology Choices
 
-### Why These Tech Stacks?
+### Why MariaDB with InnoDB?
+- **Row-level locking**: Prevents overselling with minimal contention
+- **MVCC**: Multiple reads during writes
+- **ACID compliance**: Data integrity during flash sales
+- **Battle-tested**: Proven for e-commerce workloads
 
-**Python/FastAPI**: Modern async framework, excellent for rapid development, strong typing with Pydantic
-**C#/ASP.NET Core**: Enterprise-grade performance, excellent tooling, strong typing system
-**Java/Spring Boot**: Battle-tested ecosystem, excellent for complex business logic, comprehensive features
+### Why Redis?
+- High-performance caching for read-heavy workloads
+- Session storage
+- Real-time data access
 
-### Why MariaDB with InnoDB for Flash Sales?
+### Why These Frameworks?
+- **Python/FastAPI**: Rapid development, async support, strong typing
+- **C#/ASP.NET Core**: Enterprise performance, excellent tooling
+- **Java/Spring Boot**: Battle-tested ecosystem, comprehensive features
 
-**MariaDB with InnoDB** is specifically chosen for optimal flash sale performance:
-- **Row-level locking**: Prevents overselling with minimal contention during high concurrency
-- **MVCC (Multi-Version Concurrency Control)**: Allows multiple reads while writes are happening
-- **ACID compliance**: Ensures data integrity during flash sale inventory updates
-- **Performance optimizations**: Optimized buffer pool, redo log settings for high-throughput scenarios
-- **Proven at scale**: Battle-tested for e-commerce workloads and flash sale scenarios
+## Testing Flash Sales
 
-### Common Infrastructure
-- **MariaDB with InnoDB**: Optimized for flash sale performance with row-level locking, ACID compliance, and excellent concurrency handling for high-traffic scenarios. InnoDB's MVCC (Multi-Version Concurrency Control) prevents overselling in flash sale scenarios
-- **Redis**: High-performance caching and session storage for rapid data access
-- **UUID Generation**: Distributed UUID generation for zero conflicts across services
-
-## Testing Flash Sale Functionality
-
-### Regular Order Flow
 ```bash
-# 1. Create an order
-curl -X POST "http://localhost:8000/api/v1/orders" \
+# 1. Create flash sale
+curl -X POST http://localhost:8000/api/v1/flash-sales \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_email": "test@example.com",
-    "customer_name": "Test Customer", 
-    "currency": "USD",
-    "line_items": [
-      {
-        "sku_id": "650e8400-e29b-41d4-a716-446655440001",
-        "quantity": 1
-      }
-    ]
+    "sku_id": "...",
+    "start_time": "2025-12-27T12:00:00Z",
+    "end_time": "2025-12-27T13:00:00Z",
+    "total_sale_limit": 100,
+    "max_quantity_per_customer": 2
   }'
 
-# 2. Process payment (mock)
-curl -X POST "http://localhost:8000/api/v1/orders/{order_id}/payments" \
+# 2. Purchase from flash sale
+curl -X POST http://localhost:8000/api/v1/flash-sales/{id}/purchase \
   -H "Content-Type: application/json" \
-  -d '{
-    "amount": 999.00,
-    "currency": "USD",
-    "payment_method": "credit_card"
-  }'
-```
+  -d '{"quantity": 1}'
 
-### Flash Sale Testing (Overselling Prevention)
-```bash
-# 1. Get active flash sales
-curl http://localhost:8000/api/v1/flash-sales
-
-# 2. Purchase from flash sale 
-curl -X POST "http://localhost:8000/api/v1/flash-sales/{flash_sale_id}/purchase" \
+# 3. Test overselling protection (should fail)
+curl -X POST http://localhost:8000/api/v1/flash-sales/{id}/purchase \
   -H "Content-Type: application/json" \
-  -d '{
-    "quantity": 1
-  }'
-
-# 3. Test overselling protection
-curl -X POST "http://localhost:8000/api/v1/flash-sales/{flash_sale_id}/purchase" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "quantity": 25
-  }'
-# Should fail with insufficient quantity error
-
-# 4. Test per-customer limits  
-curl -X POST "http://localhost:8000/api/v1/flash-sales/{flash_sale_id}/purchase" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "quantity": 3
-  }'
-# Should fail with max quantity per customer error (limit is 2)
+  -d '{"quantity": 200}'
 ```
 
 ## Database Access
 
 ```bash
-# Connect to MariaDB
+# MariaDB
 mysql -h 127.0.0.1 -P 3306 -u syracuse -p orange315
 # Password: Orange_315_Forever!
 
-# Connect to Redis
-redis-cli -h 127.0.0.1 -p 6380
+# Redis
+redis-cli -h 127.0.0.1 -p 6379
 ```
 
 ## Deployment
@@ -713,25 +270,18 @@ redis-cli -h 127.0.0.1 -p 6380
 Each service includes:
 - Production-ready configuration
 - Health check endpoints
-- Logging and monitoring setup
-- Docker support (ready for containerization)
+- Logging and monitoring
+- Docker/Podman support with static IPs
 
 ## Inspired by Saleor
 
-This implementation takes inspiration from Saleor's:
-- **Domain modeling** approach (Product → ProductVariant mapping to SPU → SKU)
-- **API-first design** philosophy
-- **Database schema patterns** with proper indexing and constraints
-- **Service layer architecture** with clear separation of concerns
-- **Entity relationship patterns** for e-commerce concepts
+This implementation draws inspiration from Saleor's:
+- Domain modeling (Product → ProductVariant maps to SPU → SKU)
+- API-first design philosophy
+- Database schema patterns with proper indexing
+- Service layer architecture
+- Entity relationship patterns for e-commerce
 
-## Next Steps
+## Version History
 
-To extend these services, consider adding:
-- User authentication and authorization
-- Order management integration
-- Payment processing
-- Real-time notifications
-- Metrics and analytics
-- Rate limiting and throttling
-- Distributed tracing
+See `/versions` folder for previous benchmark results and architectural iterations.

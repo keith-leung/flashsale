@@ -1,7 +1,31 @@
 # =============================================================================
-# Docker Compose - Variant X (Redis-Only Architecture)
-# Services: MariaDB + Nginx + Redis
+# Docker Compose - Variant X (Redis-Optimized Architecture)
+# Services: MariaDB + Redis + Nginx + Python + Java
 # =============================================================================
+#
+# CPU CORE ALLOCATION STRATEGY (Intel Core Ultra 9 275HX - 24 cores):
+# ---------------------------------------------------------------------
+# Hardware: 8 P-cores (0-7) + 16 E-cores (8-23)
+#
+# P-CORES (0-7) - Middleware (8 cores):
+#   - MariaDB: CPUs 0-7 (8 cores, 16GB RAM)
+#   - Redis:   CPUs 0-7 (6 cores limit, 6GB RAM) ← VARIANT X: Enhanced Redis
+#   - Nginx:   CPUs 0-7 (1 core limit, 512MB RAM)
+#
+# E-CORES (8-23) - Applications (16 cores):
+#   - Python Service:  CPUs 8-23 (4 cores limit, 4GB RAM)
+#   - Java Service:    CPUs 8-23 (4 cores limit, 4GB RAM)
+#
+# Variant X vs Variant Y Differences:
+#   - Redis: 6 CPUs / 6GB RAM (vs 2 CPUs / 2GB RAM in Y)
+#   - Aggressive cache-aside pattern with batch prefetch
+#   - Purpose: Test Redis optimization vs baseline (Variant Y)
+#
+# Rationale:
+#   - Middleware needs P-cores for maximum I/O throughput
+#   - Applications get E-cores (sufficient for I/O-bound workloads)
+#   - Fair comparison with Variant Y: same CPU tier allocation
+#   - Enhanced Redis resources to maximize caching benefits
 #
 # MIGRATION INSTRUCTIONS:
 # -----------------------
@@ -45,13 +69,13 @@ services:
   # ---------------------------------------------------------------------------
   mariadb:
     image: mariadb:10.11
-    container_name: flash-mariadb
+    container_name: flash-mariadb-x
     restart: always
     cpuset: "0-7"
     cpus: "8.0"
     mem_limit: 16G
     ports:
-      - "3307:3306"
+      - "3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: orange315
@@ -61,7 +85,8 @@ services:
     volumes:
       - mariadb_data:/var/lib/mysql
     networks:
-      - flash-benchmark-net
+      flash-benchmark-net:
+        ipv4_address: 10.88.0.11
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -70,18 +95,19 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: flash-nginx
+    container_name: flash-nginx-x
     restart: always
-    cpuset: "8-23"
+    cpuset: "0-7"  # P-cores for middleware (FIXED from 8-23)
     cpus: "1.0"
     mem_limit: 512M
     ports:
-      - "8443:443"
+      - "8444:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/ssl/nginx:ro
     networks:
-      - flash-benchmark-net
+      flash-benchmark-net:
+        ipv4_address: 10.88.0.13
     depends_on:
       - mariadb
 
@@ -90,24 +116,108 @@ services:
   # ---------------------------------------------------------------------------
   redis:
     image: redis:alpine
-    container_name: flash-redis
+    container_name: flash-redis-x
     restart: unless-stopped
-    cpuset: "8-23"
-    cpus: "6.0"
-    mem_limit: 6G
+    cpuset: "0-7"  # P-cores for middleware (FIXED from 8-23)
+    cpus: "6.0"    # VARIANT X: Enhanced Redis (vs 2.0 in Y)
+    mem_limit: 6G  # VARIANT X: Enhanced Redis (vs 2G in Y)
     ports:
-      - "6380:6379" # External debugging only
+      - "6381:6379" # External debugging only (port 6381 for Variant X)
     volumes:
       - redis_data:/data
     networks:
-      - flash-benchmark-net
+      flash-benchmark-net:
+        ipv4_address: 10.88.0.12
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # APPLICATION SERVICES (VARIANT X - REDIS-OPTIMIZED)
+  # ---------------------------------------------------------------------------
+  python-service-variant-x:
+    build:
+      context: ./python-service-variant-x
+      dockerfile: Dockerfile
+    container_name: flash-python-variant-x
+    restart: unless-stopped
+    cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
+    cpus: "4.0"
+    mem_limit: 4G
+    ports:
+      - "8100:8000"  # Port 8100 to avoid conflict with Variant Y (8000)
+    environment:
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@10.88.0.14:3306/orange315
+      REDIS_URL: redis://10.88.0.15:6379/0
+    networks:
+      flash-benchmark-net:
+        ipv4_address: 10.88.0.14
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  java-service-variant-x:
+    build:
+      context: ./java-service-variant-x
+      dockerfile: Dockerfile
+    container_name: flash-java-variant-x
+    restart: unless-stopped
+    cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
+    cpus: "4.0"
+    mem_limit: 4G
+    ports:
+      - "8101:8101"  # Port 8101 to avoid conflict with Variant Y (8080)
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://10.88.0.14:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATA_REDIS_HOST: 10.88.0.15
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_TIMEOUT: 2000ms
+    networks:
+      flash-benchmark-net:
+        ipv4_address: 10.88.0.15
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  csharp-service:
+    build:
+      context: ./csharp-service-variant-x
+      dockerfile: Dockerfile
+    container_name: flash-csharp-variant-x
+    restart: unless-stopped
+    cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
+    cpus: "4.0"
+    mem_limit: 4G
+    ports:
+      - "8102:80"  # Port 8102 to avoid conflict with Variant Y (8082)
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=10.88.0.14;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
+      ConnectionStrings__Redis: "10.88.0.15:6379"
+      ASPNETCORE_ENVIRONMENT: Development
+    networks:
+      flash-benchmark-net:
+        ipv4_address: 10.88.0.16
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   mariadb_data:
+    name: mariadb_data_x
     driver: local
   redis_data:
+    name: redis_data_x
     driver: local
 
 networks:
   flash-benchmark-net:
-    driver: bridge
+    name: podman
+    external: true

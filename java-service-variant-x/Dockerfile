@@ -17,8 +17,8 @@ COPY src src
 # Build the application
 RUN mvn clean package -DskipTests
 
-# Expose port
-EXPOSE 8080
+# Expose port (Variant X uses 8101)
+EXPOSE 8101
 
 # Add wait-for-it script for database readiness
 RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
