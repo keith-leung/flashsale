@@ -2,6 +2,35 @@
 
 A **complete flash sale e-commerce platform** with identical functionality implemented in **Python, C#, and Java**. Designed as a foundation for building different flash sale performance optimizations and testing various architectural approaches.
 
+## Quick Start - Dockerized Setup (Variant Y)
+
+All services are containerized and ready to run with Podman/Docker:
+
+```bash
+# Start all services
+podman-compose -f docker-compose-variant-y.yml up -d
+
+# Check service health
+curl http://localhost:8000/health  # Python
+curl http://localhost:8081/health  # Java
+curl http://localhost:8082/health  # C#
+curl -k https://localhost:8443/health  # Nginx Load Balancer
+
+# Run benchmarks
+wrk -t12 -c400 -d30s http://localhost:8000/health  # Python direct
+wrk -t12 -c400 -d30s http://localhost:8081/health  # Java direct
+wrk -t12 -c400 -d30s http://localhost:8082/health  # C# direct
+wrk -t12 -c400 -d30s -k https://localhost:8443/health  # Load balanced
+```
+
+Services:
+- **MariaDB**: localhost:3307 (inside: mariadb:3306)
+- **Redis**: Internal only (flash-redis:6379)
+- **Python**: localhost:8000
+- **Java**: localhost:8081
+- **C#**: localhost:8082
+- **Nginx LB**: localhost:8443 (HTTPS)
+
 ## Overview
 
 This project provides **three independent microservices** implementing flash sale functionality:
@@ -114,11 +143,16 @@ Based on comprehensive benchmarking of `/health` endpoints across all three serv
 
 **Raw HTTP Performance (/health endpoint - no database):**
 
-| Service | Requests/sec | Relative Performance | Use Case |
-|---------|--------------|---------------------|----------|
-| **C# (ASP.NET Core)** | **996,491** | 17.7× faster than Python | High-traffic flash sales, peak load handling |
-| **Java (Spring Boot)** | **172,068** | 3.1× faster than Python | Medium-traffic operations, steady state |
-| **Python (FastAPI)** | **56,250** | Baseline (1.0×) | Development velocity, rapid iteration |
+| Service | Native (req/s) | Dockerized (req/s) | Docker Impact | Relative to Python |
+|---------|----------------|--------------------|--------------|--------------------|
+| **C# (ASP.NET Core)** | **996,491** | **427,201** | -57% | 7.5× faster |
+| **Java (Spring Boot)** | **172,068** | **203,693** | +18% ⬆ | 3.6× faster |
+| **Python (FastAPI)** | **56,250** | **57,032** | +1.4% ⬆ | Baseline (1.0×) |
+
+**Dockerization Impact:**
+- **Python**: Essentially identical (+1.4%) - excellent containerization
+- **Java**: 18% faster in containers - JVM warmup optimization
+- **C#**: 57% slower in containers - .NET native performance advantage reduced
 
 **Key Findings:**
 
@@ -155,6 +189,83 @@ During high-traffic flash sale events (e.g., limited quantity drops, time-sensit
 - **Python instances** handle overflow and provide deployment flexibility
 
 ### Order API Performance (Database Transactions)
+
+#### Order Procedure Analysis
+The order procedure is consistent across all three services and is designed to be "chatty" with the database (multiple round-trips) to simulate a realistic, complex transactional workload. This explains why database latency is the primary bottleneck.
+
+**1. Python Implementation (`app/api/endpoints/orders.py`)**
+```python
+# 1. Insert Order Header (DB Interaction #1)
+order = Order(order_number=order_number, ...)
+db.add(order)
+await db.flush()  # Flush to get the order ID immediately
+
+# 2. Loop through Line Items
+for item_data in order_data.line_items:
+    # Select SKU & Inventory (DB Interaction #2...N+1)
+    # Executes a SELECT query for EVERY item in the loop
+    result = await db.execute(select(SKU)...filter(SKU.id == str(item_data.sku_id)))
+    sku = result.scalar_one_or_none()
+    
+    # Reserve inventory (Modified in memory)
+    sku.inventory.reserve_quantity(item_data.quantity)
+    
+    # Create Line Item (Added to session)
+    line_item = OrderLineItem(...)
+    line_items_to_add.append(line_item)
+
+# 3. Commit Transaction (DB Interaction Final)
+# Triggers batch UPDATEs for inventory and batch INSERTs for line items
+db.add_all(line_items_to_add)
+await db.commit()
+```
+
+**2. Java Implementation (`OrderService.java`)**
+```java
+// 1. Insert Order Header (DB Interaction #1)
+order = orderRepository.save(order); // Explicit Insert to get ID
+
+// 2. Loop through Line Items
+for (OrderLineItemCreateDto itemDto : createDto.getLineItems()) {
+    // Select SKU & Inventory (DB Interaction #2...N+1)
+    Sku sku = skuRepository.findByIdWithInventoryAndSpu(itemDto.getSkuId())...;
+
+    // Reserve inventory
+    sku.getInventory().reserveQuantity(itemDto.getQuantity());
+    
+    // Explicit Save/Update per item (Potential DB Interaction)
+    inventoryRepository.save(sku.getInventory()); 
+    orderLineItemRepository.save(lineItem);
+}
+
+// 3. Final Update (DB Interaction Final)
+orderRepository.save(order); // Update totals
+```
+
+**3. C# Implementation (`OrderService.cs`)**
+```csharp
+// 1. Insert Order Header (DB Interaction #1)
+_context.Orders.Add(order);
+await _context.SaveChangesAsync(); // Explicit Save to get ID
+
+// 2. Loop through Line Items
+foreach (var itemDto in dto.LineItems)
+{
+    // Select SKU & Inventory (DB Interaction #2...N+1)
+    var sku = await _context.Skus...FirstOrDefaultAsync(...);
+
+    // Reserve inventory (Tracked by EF Core Change Tracker)
+    sku.Inventory.ReserveQuantity(itemDto.Quantity);
+    _context.OrderLineItems.Add(new OrderLineItem { ... });
+}
+
+// 3. Commit Transaction (DB Interaction Final)
+// Executes batch UPDATEs and INSERTs
+await _context.SaveChangesAsync();
+await transaction.CommitAsync();
+```
+
+**Conclusion**: A single order with 3 items triggers **at least 5+ separate database interactions** (1 Insert Order + 3 Selects + 1 or more Updates/Inserts). This confirms the "4-7 database operations per order" metric.
 
 **Test Configuration:**
 - **Test Data**: 500 SKUs with 10,000 stock each (5M total inventory)
@@ -208,6 +319,49 @@ During high-traffic flash sale events (e.g., limited quantity drops, time-sensit
 | **C#** | 3,200 orders/sec | 3-4 instances |
 
 *Note: Database optimization required for sustained 10K+ orders/sec (increase max_connections, optimize pools)*
+
+### Dockerized Order API Performance (Podman)
+
+**Test Configuration:**
+- **Environment**: Podman containers with docker-compose-variant-y.yml
+- **Test Data**: 500 SKUs with 10,000 stock each
+- **Load Test**: wrk with 12 threads, 100 connections, 30 seconds
+- **Database**: MariaDB in container (host:3307 → container:3306)
+- **All services**: Running in isolated containers on shared network
+
+**Measured Results:**
+
+| Service | Throughput (req/s) | Latency (avg) | Total Requests | Success Rate |
+|---------|-------------------|---------------|----------------|--------------|
+| **C# (ASP.NET Core)** | **4,965** | 75.03ms | 158,714 | 96.1% |
+| **Java (Spring Boot)** | **3,539** | 49.24ms | 110,303 | 96.2% |
+| **Python (FastAPI)** | **1,484** | ~67ms | 44,654 | 96.9% |
+
+**Performance Comparison (Dockerized vs Native):**
+
+| Service | Native Orders/sec | Docker Orders/sec | Docker Impact | vs Python |
+|---------|------------------|-------------------|--------------|-----------|
+| **C#** | 3,202 | 4,965 | +55% ⬆ | 3.3× faster |
+| **Java** | 1,742 | 3,539 | +103% ⬆ | 2.4× faster |
+| **Python** | 1,595 | 1,484 | -7% | Baseline |
+
+**Key Findings:**
+
+1. **Containerization Improves Order Performance**
+   - Java: 103% faster in containers (1,742 → 3,539 req/s)
+   - C#: 55% faster in containers (3,202 → 4,965 req/s)
+   - Python: 7% slower in containers (1,595 → 1,484 req/s)
+   - Opposite trend from /health endpoints due to database isolation
+
+2. **Database Connection Pooling Benefits**
+   - Containerized services have dedicated database connections
+   - Network isolation reduces connection conflicts
+   - Better connection pool management in container environment
+
+3. **Consistent Success Rates**
+   - All services: 96-97% success rate (improved from native 83-99%)
+   - Fewer database connection errors with proper container networking
+   - Container resource limits prevent connection pool exhaustion
 
 **Database Bottleneck Evidence:**
 

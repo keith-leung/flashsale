@@ -16,4 +16,17 @@ RUN dotnet publish "FlashSale.Api.csproj" -c Release -o /app/publish /p:UseAppHo
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "FlashSale.Api.dll"]
+
+# Install netcat for database wait
+RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+
+# Create startup script
+RUN echo '#!/bin/sh\n\
+echo "Waiting for database at mariadb:3306..."\n\
+while ! nc -z mariadb 3306; do\n\
+  sleep 1\n\
+done\n\
+echo "Database is ready!"\n\
+exec dotnet FlashSale.Api.dll' > /app/start.sh && chmod +x /app/start.sh
+
+ENTRYPOINT ["/app/start.sh"]
