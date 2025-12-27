@@ -1,123 +1,520 @@
 # Flash Sale Microservices Platform
 
-A complete flash sale e-commerce platform with identical functionality implemented in **Python, C#, and Java**. Designed for performance testing and architectural comparison.
+A **complete flash sale e-commerce platform** with identical functionality implemented in **Python, C#, and Java**. Designed for **performance testing and architectural comparison** across different optimization strategies.
 
-## Latest Benchmark Results (Static IP Network - Dec 27, 2025)
+## 🏗️ Multi-Variant Architecture
 
-**Environment:** Podman containers with static IP allocation (10.88.0.0/16 subnet)
-- **CPU:** Intel Core Ultra 9 275HX - P-cores (0-7) for middleware, E-cores (8-23) for apps
-- **Memory:** 16GB MariaDB, 2GB Redis, 4GB per application
-- **Test Data:** 500 SPUs, 2,500 SKUs, 25M total stock
-- **Load Test:** wrk -t12 -c100 -d30s
+Due to Podman 3.4.4 limitations with static IP allocation, **each architectural variant runs in a dedicated WSL instance** for clean isolation and fair comparison.
 
-### Variant Y Results (Baseline Architecture)
+### This WSL Instance: Variant Y (Baseline)
 
-| Service | Throughput | Latency (avg) | Total Requests | vs Python |
-|---------|-----------|---------------|----------------|-----------|
-| **C# (ASP.NET Core)** | **4,663 req/s** | **25.15ms** | 152,422 | **3.6× faster** |
-| **Java (Spring Boot)** | **3,592 req/s** | **26.63ms** | 116,110 | **2.8× faster** |
-| **Python (FastAPI)** | 1,297 req/s | 113.97ms | 39,840 | baseline |
+**Architecture:** Standard database-heavy with minimal caching
+- Direct database queries for all operations
+- Basic Redis connection (not actively used for caching)
+- 4-7 database round-trips per order (SELECT SKU, SELECT Inventory, UPDATE Inventory, INSERT Order, INSERT Line Items)
+- **Purpose:** Baseline performance metrics for comparison
 
-**Key Findings:**
-- C# demonstrates best performance for high-throughput flash sales
-- All services are database I/O-bound (4-7 queries per order)
-- Static IP networking resolves Podman DNS reliability issues
-- 100% success rates across all three implementations
+### Other Variants (Separate WSL Instances)
 
-**Production Capacity (10K orders/sec target):**
-- C# requires 2-3 instances
-- Java requires 3-4 instances
-- Python requires 8-10 instances
+**Variant X (Redis-Optimized):**
+- Aggressive cache-aside pattern with batch prefetch
+- SKU/Inventory data cached in Redis
+- Reduced database queries (2-3 per order vs 4-7)
+- Enhanced Redis resources (6 CPUs, 6GB RAM vs 2 CPUs, 2GB RAM)
 
-## Quick Start - Dockerized Setup
+**Future Variants:**
+- Read replicas for read-heavy workloads
+- Write-optimized with async inventory updates
+- Sharded database architecture
+
+**Setup Guide:** See [DEPLOYMENT.md](DEPLOYMENT.md) for instructions on duplicating this WSL for other variants.
+
+## 📊 Baseline Performance Results (Variant Y - Dec 27, 2025)
+
+### Test Environment
+
+**Hardware & CPU Pinning:**
+```
+Intel Core Ultra 9 275HX (8 P-cores + 16 E-cores)
+
+P-Cores (0-7) - Middleware:
+├─ MariaDB: 8 cores, 16GB RAM
+├─ Redis:   2 cores, 2GB RAM
+└─ Nginx:   1 core, 512MB RAM
+
+E-Cores (8-23) - Applications:
+├─ Python:  4 cores, 4GB RAM
+├─ Java:    4 cores, 4GB RAM
+└─ C#:      4 cores, 4GB RAM
+```
+
+**Network Configuration:**
+- Podman network: 10.88.0.0/16 (static IP allocation)
+- MariaDB: 10.88.0.2:3306
+- Redis: 10.88.0.3:6379
+- Python: 10.88.0.4:8000 (host: 8000)
+- Java: 10.88.0.5:8080 (host: 8081)
+- C#: 10.88.0.6:80 (host: 8082)
+- Nginx: 10.88.0.7:443 (host: 8443)
+
+**Test Data:**
+- 500 SPUs (Standard Product Units)
+- 2,500 SKUs (Stock Keeping Units)
+- 25M total stock (10,000 per SKU)
+
+**Load Test Parameters:**
+```bash
+wrk -t12 -c100 -d30s
+# 12 threads, 100 concurrent connections, 30 seconds duration
+```
+
+### Health Check Results
+
+#### Direct Access (Service → Response)
+
+**Commands:**
+```bash
+curl http://localhost:8000/health  # Python
+curl http://localhost:8081/health  # Java
+curl http://localhost:8082/health  # C#
+```
+
+**Results:**
+| Service | Status |
+|---------|--------|
+| Python (FastAPI) | ✅ 200 OK |
+| Java (Spring Boot) | ✅ 200 OK |
+| C# (ASP.NET Core) | ✅ 200 OK |
+
+#### Via Nginx Load Balancer
+
+**Commands:**
+```bash
+curl -k https://localhost:8443/python/health   # Direct to Python via Nginx
+curl -k https://localhost:8443/java/health     # Direct to Java via Nginx
+curl -k https://localhost:8443/csharp/health   # Direct to C# via Nginx
+```
+
+**Results:**
+| Service | Status |
+|---------|--------|
+| Python via Nginx | ✅ 200 OK |
+| Java via Nginx | ✅ 200 OK |
+| C# via Nginx | ✅ 200 OK |
+
+### Order API Performance (Direct Access)
+
+#### Test Commands
+
+**Python:**
+```bash
+wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
+  http://localhost:8000/api/v1/orders
+```
+
+**Java:**
+```bash
+wrk -t12 -c100 -d30s -s java-service/wrk_order_script.lua \
+  http://localhost:8081/api/v1/orders
+```
+
+**C#:**
+```bash
+wrk -t12 -c100 -d30s -s csharp-service/wrk_order_script.lua \
+  http://localhost:8082/api/v1/orders
+```
+
+#### Benchmark Results (Service → Database)
+
+| Service | Throughput | Latency (avg) | Total Requests | Success Rate | vs Python |
+|---------|-----------|---------------|----------------|--------------|-----------|
+| **C# (ASP.NET Core)** | **4,912 req/s** | **36.07ms** | 152,900 | 100% | **3.3× faster** |
+| **Java (Spring Boot)** | **3,324 req/s** | **47.42ms** | 103,102 | 100% | **2.3× faster** |
+| **Python (FastAPI)** | 1,470 req/s | 107.32ms | 45,791 | 99.99% | baseline |
+
+### Nginx Load Balancer Performance
+
+#### Test Command
 
 ```bash
-# Start Variant Y (baseline) with static IP network
-podman-compose -f docker-compose-variant-y.yml up -d
+wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
+  https://localhost:8443/api/v1/orders
+```
 
-# Verify static IPs
-podman inspect flash-mariadb flash-python flash-java flash-csharp | grep IPAddress
+#### Results (Client → Nginx → Services → Database)
+
+| Metric | Value |
+|--------|-------|
+| **Throughput** | 2,136 req/s |
+| **Latency (avg)** | 65.26ms |
+| **Total Requests** | 66,390 |
+| **Success Rate** | 88.4% |
+| **Load Distribution** | Round-robin (Python, Java, C#) |
+
+**Nginx Overhead Analysis:**
+- Adds ~31ms average latency
+- Reduces throughput from individual service max to 2,136 req/s
+- Lower success rate (88.4%) due to Python being slower in the pool
+- Round-robin distributes load evenly across all three services
+
+### Key Findings
+
+1. **C# Performance Leader**
+   - 4,912 req/s throughput with 36ms latency
+   - 100% success rate under load
+   - Most cost-effective for production (2-3 instances for 10K req/s)
+
+2. **Java Balanced Performance**
+   - 3,324 req/s with 47ms latency
+   - 100% success rate
+   - Good middle ground (3-4 instances for 10K req/s)
+
+3. **Python Developer Productivity**
+   - 1,470 req/s with 107ms latency
+   - 99.99% success rate (excellent reliability)
+   - Requires 7-8 instances for 10K req/s
+
+4. **Database I/O Bottleneck**
+   - All services perform 4-7 database queries per order
+   - Performance gap narrows from 17× (/health) to 3.3× (orders)
+   - Database transactions dominate execution time
+   - Proves application code is not the bottleneck
+
+5. **CPU Pinning Effectiveness**
+   - E-cores (8-23) sufficient for I/O-bound application workloads
+   - P-cores (0-7) critical for MariaDB I/O performance
+   - Middleware benefits significantly from P-core allocation
+
+6. **Static IP Reliability**
+   - 100% success rates on direct access
+   - Resolves Podman 3.4.4 DNS resolution issues
+   - Consistent connectivity across services
+
+7. **Nginx Load Balancer Trade-offs**
+   - Adds SSL termination and load distribution
+   - ~31ms latency overhead
+   - Success rate drops when slower services are in the pool
+   - Consider dedicated pools per service type in production
+
+8. **Production Capacity Planning**
+   - C#: Most cost-effective at 4,912 req/s per instance
+   - Java: Good balance at 3,324 req/s per instance
+   - Python: Development velocity advantage, 1,470 req/s per instance
+
+## 🔍 Order Procedure Analysis (Why Database is the Bottleneck)
+
+The order procedure is **intentionally "chatty"** with the database (multiple round-trips) to simulate realistic, complex transactional workloads.
+
+### Database Operations Per Order
+
+**Minimum 4-7 separate database interactions:**
+
+1. **INSERT Order Header** (1 query)
+2. **SELECT SKU + Inventory** (1 query per line item)
+3. **UPDATE Inventory** (1 query per line item)
+4. **INSERT Line Items** (batch or individual)
+5. **UPDATE Order Totals** (1 query)
+
+**Example with 3 line items:** 1 + 3 + 3 + 1 + 1 = **9 database queries**
+
+### Python Implementation (`app/api/endpoints/orders.py`)
+
+```python
+# DB Query #1: Insert Order Header
+order = Order(order_number=order_number, ...)
+db.add(order)
+await db.flush()  # Get order ID immediately
+
+# DB Queries #2-N: Loop through line items
+for item_data in order_data.line_items:
+    # SELECT SKU & Inventory (1 query per item)
+    result = await db.execute(
+        select(SKU).filter(SKU.id == str(item_data.sku_id))
+    )
+    sku = result.scalar_one_or_none()
+
+    # Modify inventory in memory
+    sku.inventory.reserve_quantity(item_data.quantity)
+
+    # Prepare line item for batch insert
+    line_items_to_add.append(OrderLineItem(...))
+
+# DB Query #N+1: Commit transaction
+db.add_all(line_items_to_add)
+await db.commit()  # Batch UPDATE inventory + INSERT line items
+```
+
+### Java Implementation (`OrderService.java`)
+
+```java
+// DB Query #1: Insert Order Header
+order = orderRepository.save(order);
+
+// DB Queries #2-N: Loop through line items
+for (OrderLineItemCreateDto itemDto : createDto.getLineItems()) {
+    // SELECT SKU & Inventory (1 query per item)
+    Sku sku = skuRepository.findByIdWithInventoryAndSpu(
+        itemDto.getSkuId()
+    );
+
+    // Reserve inventory (tracked by JPA)
+    sku.getInventory().reserveQuantity(itemDto.getQuantity());
+
+    // Save per item (potential DB query each iteration)
+    inventoryRepository.save(sku.getInventory());
+    orderLineItemRepository.save(lineItem);
+}
+
+// DB Query #N+1: Final update
+orderRepository.save(order);
+```
+
+### C# Implementation (`OrderService.cs`)
+
+```csharp
+// DB Query #1: Insert Order Header
+_context.Orders.Add(order);
+await _context.SaveChangesAsync();
+
+// DB Queries #2-N: Loop through line items
+foreach (var itemDto in dto.LineItems)
+{
+    // SELECT SKU & Inventory (1 query per item)
+    var sku = await _context.Skus
+        .Include(s => s.Inventory)
+        .FirstOrDefaultAsync(...);
+
+    // Reserve inventory (tracked by EF Core)
+    sku.Inventory.ReserveQuantity(itemDto.Quantity);
+    _context.OrderLineItems.Add(new OrderLineItem { ... });
+}
+
+// DB Query #N+1: Commit transaction
+await _context.SaveChangesAsync();
+await transaction.CommitAsync();
+```
+
+### Performance Impact
+
+This "chatty" design explains why:
+- C# loses 311× performance from /health (996K) to orders (3.2K)
+- Java loses 99× performance from /health (172K) to orders (1.7K)
+- Python loses 60× performance from /health (95K) to orders (1.5K)
+
+**The faster the framework, the more database latency dominates.**
+
+## 🚀 Quick Start - Production Setup
+
+### Prerequisites
+
+**Required Services:**
+- Podman 3.4.4+ or Docker 20.10+
+- wrk (HTTP benchmarking tool)
+
+**All dependencies containerized:**
+- MariaDB 10.11 (included in docker-compose.yml)
+- Redis 6.0+ (included in docker-compose.yml)
+- Nginx (included in docker-compose.yml)
+
+### Start All Services
+
+```bash
+# Start entire stack
+podman-compose up -d
+
+# Verify containers are running
+podman ps
 
 # Check service health
 curl http://localhost:8000/health  # Python
 curl http://localhost:8081/health  # Java
 curl http://localhost:8082/health  # C#
-
-# Generate test data
-podman exec flash-python python /app/setup_test_data.py 500 5 10000
-
-# Copy SKU IDs for benchmarks
-podman cp flash-python:/tmp/stress_test_sku_ids.txt /tmp/stress_test_sku_ids.txt
-
-# Run benchmarks
-wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua http://localhost:8000/api/v1/orders
-wrk -t12 -c100 -d30s -s java-service/wrk_order_script.lua http://localhost:8081/api/v1/orders
-wrk -t12 -c100 -d30s -s csharp-service/wrk_order_script.lua http://localhost:8082/api/v1/orders
+curl -k https://localhost:8443/python/health  # Via Nginx
 ```
 
-### Network Architecture
+### Generate Test Data
 
-**Static IP Allocation (10.88.0.0/16 subnet):**
-- MariaDB: 10.88.0.2:3306
-- Redis: 10.88.0.3:6379
-- Nginx: 10.88.0.4:443
-- Python: 10.88.0.5:8000 (host: 8000)
-- Java: 10.88.0.6:8080 (host: 8081)
-- C#: 10.88.0.7:80 (host: 8082)
+```bash
+# Generate 500 SPUs with 2,500 SKUs (10,000 stock each)
+podman exec flash-python python /app/setup_test_data.py 500 5 10000
 
-**Why Static IPs:** Podman 3.4.4 has unreliable DNS resolution in container networking. Static IP allocation ensures consistent connectivity.
+# Copy SKU IDs file for benchmarks
+podman cp flash-python:/tmp/stress_test_sku_ids.txt /tmp/stress_test_sku_ids.txt
+```
 
-### CPU Allocation Strategy
+### Run Complete Benchmark Suite
 
-**Hardware:** Intel Core Ultra 9 275HX (8 P-cores + 16 E-cores)
+#### 1. Health Check Benchmarks (Direct)
 
-**P-Cores (0-7) - Middleware:**
-- MariaDB: 8 cores, 16GB RAM
-- Redis: 2 cores, 2GB RAM
-- Nginx: 1 core, 512MB RAM
+```bash
+# Python
+wrk -t12 -c100 -d30s http://localhost:8000/health
 
-**E-Cores (8-23) - Applications:**
-- Python: 4 cores, 4GB RAM
-- Java: 4 cores, 4GB RAM
-- C#: 4 cores, 4GB RAM
+# Java
+wrk -t12 -c100 -d30s http://localhost:8081/health
 
-**Rationale:** Middleware (database, cache, load balancer) requires P-cores for maximum I/O throughput. Applications are I/O-bound and run efficiently on E-cores.
+# C#
+wrk -t12 -c100 -d30s http://localhost:8082/health
+```
 
-## Overview
+#### 2. Health Check Benchmarks (Via Nginx)
 
-Three independent microservices implementing flash sale functionality:
+```bash
+# Python via Nginx
+wrk -t12 -c100 -d30s -k https://localhost:8443/python/health
 
-1. **Python Service** - FastAPI + SQLAlchemy + MariaDB + Redis
-2. **C# Service** - ASP.NET Core + EF Core + MariaDB + Redis
-3. **Java Service** - Spring Boot + JPA + MariaDB + Redis
+# Java via Nginx
+wrk -t12 -c100 -d30s -k https://localhost:8443/java/health
 
-## Core Features
+# C# via Nginx
+wrk -t12 -c100 -d30s -k https://localhost:8443/csharp/health
+```
 
-### Product Management
-- **SPU (Standard Product Unit)** - Product catalog with slug-based identification
-- **SKU (Stock Keeping Unit)** - Product variants with pricing and inventory
+#### 3. Order API Benchmarks (Direct)
+
+```bash
+# Python
+wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
+  http://localhost:8000/api/v1/orders
+
+# Java
+wrk -t12 -c100 -d30s -s java-service/wrk_order_script.lua \
+  http://localhost:8081/api/v1/orders
+
+# C#
+wrk -t12 -c100 -d30s -s csharp-service/wrk_order_script.lua \
+  http://localhost:8082/api/v1/orders
+```
+
+#### 4. Order API Benchmark (Load Balanced)
+
+```bash
+# Round-robin across all services
+wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
+  https://localhost:8443/api/v1/orders
+```
+
+### Manual Order Creation (Testing)
+
+```bash
+# Get a test SKU ID
+SKU_ID=$(head -1 /tmp/stress_test_sku_ids.txt)
+
+# Create order via Python
+curl -X POST http://localhost:8000/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"customer_email\": \"test@example.com\",
+    \"customer_name\": \"Test User\",
+    \"currency\": \"USD\",
+    \"line_items\": [{
+      \"sku_id\": \"$SKU_ID\",
+      \"quantity\": 2
+    }]
+  }"
+
+# Create order via Java
+curl -X POST http://localhost:8081/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"customer_email\": \"test@example.com\",
+    \"customer_name\": \"Test User\",
+    \"currency\": \"USD\",
+    \"line_items\": [{
+      \"sku_id\": \"$SKU_ID\",
+      \"quantity\": 2
+    }]
+  }"
+
+# Create order via C#
+curl -X POST http://localhost:8082/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"customer_email\": \"test@example.com\",
+    \"customer_name\": \"Test User\",
+    \"currency\": \"USD\",
+    \"line_items\": [{
+      \"sku_id\": \"$SKU_ID\",
+      \"quantity\": 2
+    }]
+  }"
+```
+
+### Verify Orders in Database
+
+```bash
+# Connect to MariaDB container
+podman exec -it flash-mariadb mysql -u syracuse -pOrange_315_Forever! orange315
+
+# Check recent orders
+SELECT id, order_number, customer_email, total_amount, status
+FROM orders
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+## 📦 Core Features
+
+All three services implement identical functionality:
+
+### SPU (Standard Product Unit) Management
+- Product concepts with unique slug-based identification
+- Metadata and descriptions
+- Variants (SKUs) association
+
+### SKU (Stock Keeping Unit) Management
+- Product variants with unique SKU codes
+- Pricing and cost management
+- Weight and inventory tracking
 
 ### Flash Sale Events
-- Time-based sales with start/end times
-- Total sale limits and per-customer quantity restrictions
-- Real-time status updates (Scheduled → Active → Ended)
-- Automatic inventory management
+- Time-based sales (`start_time`, `end_time`)
+- Sale limits (`total_sale_limit`)
+- Customer quantity restrictions (`max_quantity_per_customer`)
+- Automatic state transitions (Scheduled → Active → Ended)
+
+### Inventory Management
+- Real-time stock tracking
+- Reserved quantity management
+- Overselling prevention
+- Inventory adjustments and auditing
 
 ### Order Processing
-- Full ACID transaction support
-- Inventory reservation and fulfillment
+- Full ACID transactions
 - Multi-item orders with line items
-- Real-time stock tracking
+- Inventory reservation and fulfillment
+- Payment tracking
 
-## Architecture Principles
+## 🏛️ Architecture Principles
 
-- **Domain-Driven Design** - Clear separation of concerns
-- **API-First** - RESTful APIs with OpenAPI/Swagger documentation
-- **Database-First** - Manual SQL schema migrations (no code-first)
-- **Scalability** - Redis caching, async operations, background tasks
-- **Data Integrity** - Database constraints, optimistic concurrency, transactions
+### Domain-Driven Design
+- Clear separation of concerns
+- Entity-based modeling
+- Business logic encapsulation
 
-## Service Comparison
+### API-First Architecture
+- RESTful APIs with OpenAPI/Swagger
+- Consistent DTOs/schemas across services
+- Validation at API boundaries
+
+### Database-First Approach
+- Manual SQL migrations (no code-first)
+- Deliberate schema changes
+- Production-ready practices
+
+### Scalability & Performance
+- Redis caching layer
+- Async operations
+- Background tasks
+- Connection pooling
+
+### Data Integrity
+- Database constraints and indexes
+- Optimistic locking for inventory
+- Transaction management
+- ACID compliance
+
+## 🛠️ Service Comparison
 
 | Feature | Python (FastAPI) | C# (ASP.NET Core) | Java (Spring Boot) |
 |---------|------------------|-------------------|-------------------|
@@ -127,36 +524,37 @@ Three independent microservices implementing flash sale functionality:
 | **Database** | MariaDB (InnoDB) | MariaDB (InnoDB) | MariaDB (InnoDB) |
 | **Caching** | Redis | Redis | Redis |
 | **Documentation** | OpenAPI/Swagger | Swagger | SpringDoc |
+| **Background Tasks** | Celery | Hosted Services | @Scheduled |
+| **Object Mapping** | Pydantic | AutoMapper | MapStruct |
 
-## Important Conventions
+## 📋 Important Project Conventions
 
-### 1. ID Generation (Snowflake-style)
-All IDs are **time-based, incrementing UUID-style identifiers**. They are NOT random UUIDs - IDs increase over time.
+### 1. ID Generation (Snowflake IDs)
+
+All IDs are **time-based, incrementing UUID-style identifiers** (like Twitter Snowflake IDs). They are NOT random UUIDs - IDs increase over time.
 
 ### 2. Database Schema Migrations
-**Database-first approach** - All schema changes via manual SQL scripts. Code-first migrations are forbidden.
 
-### 3. Python/FastAPI Patterns
-- **UUIDs in Queries**: Convert UUID objects to strings (`str(uuid_object)`) before database queries
-- **Eager Loading**: Use `selectinload()` for relationships in async contexts to prevent lazy loading errors
+**Database-first approach only.** All schema changes via manual SQL scripts. Code-first migrations are forbidden.
 
-### 4. Proactive Bug Resolution
+### 3. Proactive Bug Resolution
+
 When fixing a bug, scan the entire codebase for similar patterns and apply the fix everywhere.
 
-## Database Schema
+### 4. Python/FastAPI Patterns
 
-**Core Models:**
-- **SPU**: Product catalog entries
-- **SKU**: Product variants with pricing
-- **Inventory**: Stock levels and reservations
-- **Flash Sale Events**: Time-limited promotions
-- **Orders**: Customer purchases
-- **Order Line Items**: Items within orders
-- **Payments**: Payment transactions
+- **UUIDs in Queries**: Convert UUID objects to strings before database queries (`str(uuid_object)`)
+- **Eager Loading**: Use `selectinload()` for relationships in async contexts to prevent lazy loading errors
 
-**All IDs**: UUID format (CHAR(36)) for distributed generation
+```python
+# Good
+select(Order).options(selectinload(Order.line_items)).filter(...)
 
-## API Endpoints
+# Bad (will cause 500 errors)
+select(Order).filter(...)  # line_items will fail to load
+```
+
+## 🔗 API Endpoints
 
 All services expose identical REST APIs:
 
@@ -194,94 +592,42 @@ All services expose identical REST APIs:
 - `POST /api/v1/inventory/{sku_id}/reserve` - Reserve stock
 - `POST /api/v1/inventory/{sku_id}/release` - Release reserved stock
 
-## Business Logic
-
-### Flash Sale State Management
-- **Scheduled** → **Active** (when current time >= start_time)
-- **Active** → **Ended** (when current time >= end_time OR sold >= limit)
-- **Any State** → **Cancelled** (manual)
-
-### Inventory Management
-- **Available Quantity** = Total - Reserved
-- **Reservation System** prevents overselling
-- **Fulfillment** reduces both reserved and total quantities
-
-### Concurrency Handling
-- Database-level constraints (unique slugs/SKU codes)
-- Optimistic locking for inventory updates
-- Transaction boundaries for multi-step operations
-
-## Technology Choices
+## 💡 Technology Choices
 
 ### Why MariaDB with InnoDB?
+
+**Optimized for flash sale performance:**
 - **Row-level locking**: Prevents overselling with minimal contention
 - **MVCC**: Multiple reads during writes
-- **ACID compliance**: Data integrity during flash sales
-- **Battle-tested**: Proven for e-commerce workloads
+- **ACID compliance**: Data integrity during inventory updates
+- **Proven at scale**: Battle-tested for e-commerce
 
 ### Why Redis?
-- High-performance caching for read-heavy workloads
+
+- High-performance caching
 - Session storage
 - Real-time data access
 
 ### Why These Frameworks?
+
 - **Python/FastAPI**: Rapid development, async support, strong typing
 - **C#/ASP.NET Core**: Enterprise performance, excellent tooling
 - **Java/Spring Boot**: Battle-tested ecosystem, comprehensive features
 
-## Testing Flash Sales
+## 📚 Additional Resources
 
-```bash
-# 1. Create flash sale
-curl -X POST http://localhost:8000/api/v1/flash-sales \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sku_id": "...",
-    "start_time": "2025-12-27T12:00:00Z",
-    "end_time": "2025-12-27T13:00:00Z",
-    "total_sale_limit": 100,
-    "max_quantity_per_customer": 2
-  }'
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Multi-WSL setup guide for testing variants
+- **[/versions](versions/)** - Historical benchmark results and iterations
+- **Swagger Docs**:
+  - Python: http://localhost:8000/docs
+  - Java: http://localhost:8081/swagger-ui.html
+  - C#: http://localhost:8082/swagger
 
-# 2. Purchase from flash sale
-curl -X POST http://localhost:8000/api/v1/flash-sales/{id}/purchase \
-  -H "Content-Type: application/json" \
-  -d '{"quantity": 1}'
-
-# 3. Test overselling protection (should fail)
-curl -X POST http://localhost:8000/api/v1/flash-sales/{id}/purchase \
-  -H "Content-Type: application/json" \
-  -d '{"quantity": 200}'
-```
-
-## Database Access
-
-```bash
-# MariaDB
-mysql -h 127.0.0.1 -P 3306 -u syracuse -p orange315
-# Password: Orange_315_Forever!
-
-# Redis
-redis-cli -h 127.0.0.1 -p 6379
-```
-
-## Deployment
-
-Each service includes:
-- Production-ready configuration
-- Health check endpoints
-- Logging and monitoring
-- Docker/Podman support with static IPs
-
-## Inspired by Saleor
+## 🎯 Inspired by Saleor
 
 This implementation draws inspiration from Saleor's:
 - Domain modeling (Product → ProductVariant maps to SPU → SKU)
 - API-first design philosophy
 - Database schema patterns with proper indexing
 - Service layer architecture
-- Entity relationship patterns for e-commerce
-
-## Version History
-
-See `/versions` folder for previous benchmark results and architectural iterations.
+- E-commerce entity relationships
