@@ -13,6 +13,7 @@ public class FlashSaleDbContext : DbContext
     public DbSet<Sku> Skus { get; set; }
     public DbSet<Inventory> Inventories { get; set; }
     public DbSet<FlashSaleEvent> FlashSaleEvents { get; set; }
+    public DbSet<Models.FlashSale> FlashSales { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderLineItem> OrderLineItems { get; set; }
     public DbSet<Payment> Payments { get; set; }
@@ -26,6 +27,7 @@ public class FlashSaleDbContext : DbContext
         modelBuilder.Entity<Sku>().ToTable("skus");
         modelBuilder.Entity<Inventory>().ToTable("inventory");
         modelBuilder.Entity<FlashSaleEvent>().ToTable("flash_sale_events");
+        modelBuilder.Entity<Models.FlashSale>().ToTable("flash_sales");
         modelBuilder.Entity<Order>().ToTable("orders");
         modelBuilder.Entity<OrderLineItem>().ToTable("order_line_items");
         modelBuilder.Entity<Payment>().ToTable("payments");
@@ -68,16 +70,34 @@ public class FlashSaleDbContext : DbContext
             entity.HasIndex(e => e.EndTime);
             entity.HasIndex(e => e.Status);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            
+
             entity.HasOne(e => e.Sku)
                   .WithMany(e => e.FlashSales)
                   .HasForeignKey(e => e.SkuId)
                   .OnDelete(DeleteBehavior.Cascade);
-                  
+
             entity.Property(e => e.Status)
                   .HasConversion<string>();
         });
-        
+
+        // FlashSale (Campaign) configuration
+        modelBuilder.Entity<Models.FlashSale>(entity =>
+        {
+            entity.HasIndex(e => e.SpuId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.StartTime);
+            entity.HasIndex(e => e.EndTime);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.Spu)
+                  .WithMany()
+                  .HasForeignKey(e => e.SpuId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Property(e => e.Status)
+                  .HasConversion<string>();
+        });
+
         // Order configuration
         modelBuilder.Entity<Order>(entity =>
         {

@@ -1,0 +1,126 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb
+    restart: always
+    ports:
+      - "3311:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orange315
+      MYSQL_USER: syracuse
+      MYSQL_PASSWORD: Orange_315_Forever!
+    command: --innodb-buffer-pool-size=1G --max-connections=3000 --innodb-flush-log-at-trx-commit=2
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - flash-benchmark-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    container_name: flash-nginx
+    restart: always
+    ports:
+      - "8444:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/nginx:ro
+    networks:
+      - flash-benchmark-net
+    depends_on:
+      - mariadb
+      - python-service
+      - java-service
+      - csharp-service
+
+  redis:
+    image: redis:alpine
+    container_name: flash-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - flash-benchmark-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: flash-python
+    restart: unless-stopped
+    ports:
+      - "30001:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@flash-mariadb:3306/orange315
+      REDIS_URL: redis://flash-redis:6379/0
+    # Use unified hybrid app with intelligent routing
+    command: sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    networks:
+      - flash-benchmark-net
+    depends_on:
+      - mariadb
+      - redis
+
+  java-service:
+    build:
+      context: ./java-service
+      dockerfile: Dockerfile
+    container_name: flash-java
+    restart: unless-stopped
+    ports:
+      - "8006:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://flash-mariadb:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: syracuse
+      SPRING_DATASOURCE_PASSWORD: Orange_315_Forever!
+      SPRING_DATA_REDIS_HOST: flash-redis
+      SPRING_DATA_REDIS_PORT: 6379
+      # ACTIVATE VARIANT X PROFILE
+      SPRING_PROFILES_ACTIVE: variant-x
+    networks:
+      - flash-benchmark-net
+    depends_on:
+      - mariadb
+      - redis
+
+  csharp-service:
+    build:
+      context: ./csharp-service
+      dockerfile: Dockerfile
+    container_name: flash-csharp
+    restart: unless-stopped
+    ports:
+      - "30002:80"
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=flash-mariadb;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
+      ConnectionStrings__Redis: "flash-redis:6379"
+      ASPNETCORE_ENVIRONMENT: Development
+      # ACTIVATE VARIANT X
+      Variant: X
+      # Fix inotify limit issue
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    networks:
+      - flash-benchmark-net
+    depends_on:
+      - mariadb
+      - redis
+
+volumes:
+  mariadb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  flash-benchmark-net:
+    driver: bridge

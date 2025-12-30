@@ -38,6 +38,9 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
     return ConnectionMultiplexer.Connect(connectionString);
 });
 
+// Redis Cache Service
+builder.Services.AddSingleton<RedisCacheService>();
+
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(Program));
 
