@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public class FlashSaleDtos {
 
-    public static class FlashSaleEventCreateDto {
+    public static class FlashSaleCampaignCreateDto {
         @NotBlank(message = "Name is required")
         @Size(max = 250, message = "Name must not exceed 250 characters")
         private String name;
@@ -19,7 +19,7 @@ public class FlashSaleDtos {
         private String description;
 
         @NotNull(message = "SKU ID is required")
-        private UUID skuId;
+        private UUID spuId;
 
         @NotNull(message = "Total sale limit is required")
         @Min(value = 1, message = "Total sale limit must be at least 1")
@@ -37,11 +37,11 @@ public class FlashSaleDtos {
         private Boolean isActive = true;
 
         // Constructors
-        public FlashSaleEventCreateDto() {}
+        public FlashSaleCampaignCreateDto() {}
 
-        public FlashSaleEventCreateDto(String name, UUID skuId, Integer totalSaleLimit, LocalDateTime startTime, LocalDateTime endTime) {
+        public FlashSaleCampaignCreateDto(String name, UUID spuId, Integer totalSaleLimit, LocalDateTime startTime, LocalDateTime endTime) {
             this.name = name;
-            this.skuId = skuId;
+            this.spuId = spuId;
             this.totalSaleLimit = totalSaleLimit;
             this.startTime = startTime;
             this.endTime = endTime;
@@ -64,12 +64,12 @@ public class FlashSaleDtos {
             this.description = description;
         }
 
-        public UUID getSkuId() {
-            return skuId;
+        public UUID getSpuId() {
+            return spuId;
         }
 
-        public void setSkuId(UUID skuId) {
-            this.skuId = skuId;
+        public void setSpuId(UUID spuId) {
+            this.spuId = spuId;
         }
 
         public Integer getTotalSaleLimit() {
@@ -113,7 +113,7 @@ public class FlashSaleDtos {
         }
     }
 
-    public static class FlashSaleEventUpdateDto {
+    public static class FlashSaleCampaignUpdateDto {
         @Size(max = 250, message = "Name must not exceed 250 characters")
         private String name;
 
@@ -134,7 +134,7 @@ public class FlashSaleDtos {
         private Boolean isActive;
 
         // Constructors
-        public FlashSaleEventUpdateDto() {}
+        public FlashSaleCampaignUpdateDto() {}
 
         // Getters and Setters
         public String getName() {
@@ -202,11 +202,11 @@ public class FlashSaleDtos {
         }
     }
 
-    public static class FlashSaleEventResponseDto {
+    public static class FlashSaleCampaignResponseDto {
         private UUID id;
         private String name;
         private String description;
-        private UUID skuId;
+        private UUID spuId;
         private String skuCode;
         private Integer totalSaleLimit;
         private Integer soldQuantity;
@@ -221,7 +221,7 @@ public class FlashSaleDtos {
         private LocalDateTime updatedAt;
 
         // Constructors
-        public FlashSaleEventResponseDto() {}
+        public FlashSaleCampaignResponseDto() {}
 
         // Getters and Setters
         public UUID getId() {
@@ -248,12 +248,12 @@ public class FlashSaleDtos {
             this.description = description;
         }
 
-        public UUID getSkuId() {
-            return skuId;
+        public UUID getSpuId() {
+            return spuId;
         }
 
-        public void setSkuId(UUID skuId) {
-            this.skuId = skuId;
+        public void setSpuId(UUID spuId) {
+            this.spuId = spuId;
         }
 
         public String getSkuCode() {

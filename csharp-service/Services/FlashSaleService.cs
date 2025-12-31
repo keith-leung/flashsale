@@ -16,7 +16,7 @@ public class FlashSaleService : IFlashSaleService
 
     public async Task<IEnumerable<FlashSaleEventResponseDto>> GetAllAsync(int skip = 0, int take = 100, FlashSaleStatus? status = null)
     {
-        var query = _context.FlashSaleEvents.AsQueryable();
+        var query = _context.FlashSaleCampaigns.AsQueryable();
 
         if (status.HasValue)
         {
@@ -34,7 +34,7 @@ public class FlashSaleService : IFlashSaleService
             Id = f.Id,
             Name = f.Name,
             Description = f.Description,
-            SkuId = f.SkuId,
+            SpuId = f.SpuId,
             TotalSaleLimit = f.TotalSaleLimit,
             SoldQuantity = f.SoldQuantity,
             RemainingQuantity = f.TotalSaleLimit - f.SoldQuantity,
@@ -52,7 +52,7 @@ public class FlashSaleService : IFlashSaleService
 
     public async Task<FlashSaleEventResponseDto?> GetByIdAsync(Guid id)
     {
-        var flashSale = await _context.FlashSaleEvents.FindAsync(id);
+        var flashSale = await _context.FlashSaleCampaigns.FindAsync(id);
         if (flashSale == null) return null;
 
         return new FlashSaleEventResponseDto
@@ -60,7 +60,7 @@ public class FlashSaleService : IFlashSaleService
             Id = flashSale.Id,
             Name = flashSale.Name,
             Description = flashSale.Description,
-            SkuId = flashSale.SkuId,
+            SpuId = flashSale.SpuId,
             TotalSaleLimit = flashSale.TotalSaleLimit,
             SoldQuantity = flashSale.SoldQuantity,
             RemainingQuantity = flashSale.TotalSaleLimit - flashSale.SoldQuantity,

@@ -39,7 +39,7 @@ class OrderCreate(BaseModel):
     shipping_amount: Optional[Decimal] = Field(0, ge=0, decimal_places=2)
     currency: str = Field("USD", min_length=3, max_length=3)
     notes: Optional[str] = None
-    flash_sale_id: Optional[str] = None
+    flash_sale_campaign_id: Optional[str] = None
     line_items: List[OrderLineItemCreate] = Field(..., min_length=1)
 
 
@@ -63,7 +63,7 @@ class OrderResponse(BaseModel):
     currency: str
     status: OrderStatus
     notes: Optional[str]
-    flash_sale_id: Optional[str]
+    flash_sale_campaign_id: Optional[str]
     created_at: datetime
     updated_at: datetime
     line_items: List[OrderLineItemResponse] = []

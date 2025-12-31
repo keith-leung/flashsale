@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: flashsale-service
+
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: syracuse
+    password: Orange_315_Forever!
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        type:
+          preferred_uuid_jdbc_type: CHAR
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+      timeout: 2000ms
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.flashsale.api: INFO
+    org.springframework.cache: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method

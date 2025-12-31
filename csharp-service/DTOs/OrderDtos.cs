@@ -46,9 +46,9 @@ public class OrderCreateDto
     public string Currency { get; set; } = "USD";
     
     public string? Notes { get; set; }
-    
-    public Guid? FlashSaleId { get; set; }
-    
+
+    public Guid? FlashSaleCampaignId { get; set; }
+
     [Required]
     [MinLength(1)]
     public List<OrderLineItemCreateDto> LineItems { get; set; } = new();
@@ -74,7 +74,7 @@ public class OrderResponseDto
     public string Currency { get; set; } = string.Empty;
     public OrderStatus Status { get; set; }
     public string? Notes { get; set; }
-    public Guid? FlashSaleId { get; set; }
+    public Guid? FlashSaleCampaignId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<OrderLineItemResponseDto> LineItems { get; set; } = new();

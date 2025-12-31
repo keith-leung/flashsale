@@ -1,4 +1,4 @@
-"""Flash Sale Event model."""
+"""Flash Sale Campaign model - SPU-level campaigns."""
 
 import uuid
 from datetime import datetime
@@ -19,38 +19,44 @@ class FlashSaleStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class FlashSaleEvent(Base):
-    """Flash Sale Event with time-based controls and sale limits."""
-    
-    __tablename__ = "flash_sale_events"
-    
+class FlashSaleCampaign(Base):
+    """Flash Sale Campaign - SPU-level (product family) with time-based controls and sale limits.
+
+    CRITICAL: Campaigns are SPU-level, NOT SKU-level!
+    Example: Campaign for "iPhone 16" (SPU) with 100K total_sale_limit
+             Customers order "iPhone 16 Black 512GB" or "iPhone 16 Silver 128GB" (SKUs)
+             Campaign tracks total across ALL SKUs under the SPU
+    """
+
+    __tablename__ = "flash_sale_campaigns"
+
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(250), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    
-    # Foreign Keys
-    sku_id = Column(CHAR(36), ForeignKey("skus.id"), nullable=False, index=True)
+
+    # Foreign Keys - Links to SPU (product family), NOT SKU (variant)!
+    spu_id = Column(CHAR(36), ForeignKey("spus.id"), nullable=False, index=True)
     
     # Sale constraints
-    total_sale_limit = Column(Integer, nullable=False)  # Total units available for this flash sale
-    sold_quantity = Column(Integer, default=0, nullable=False)  # Units sold so far
+    total_sale_limit = Column(Integer, nullable=False)  # Total units across ALL SKUs under this SPU
+    sold_quantity = Column(Integer, default=0, nullable=False)  # Incremented when ANY SKU under this SPU is ordered
     max_quantity_per_customer = Column(Integer, default=1, nullable=False)  # Max per customer
-    
+
     # Time constraints
     start_time = Column(DateTime, nullable=False, index=True)
     end_time = Column(DateTime, nullable=False, index=True)
-    
+
     # Status and flags
     status = Column(SQLEnum(FlashSaleStatus), default=FlashSaleStatus.SCHEDULED, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
-    sku = relationship("SKU")
-    orders = relationship("Order", back_populates="flash_sale")
+    spu = relationship("SPU")  # Links to product family
+    orders = relationship("Order", back_populates="flash_sale_campaign")
     
     @property
     def remaining_quantity(self):
@@ -110,6 +116,6 @@ class FlashSaleEvent(Base):
     
     def __str__(self):
         return f"{self.name} ({self.status.value})"
-    
+
     def __repr__(self):
-        return f"<FlashSaleEvent(id={self.id}, name='{self.name}', status='{self.status.value}')>"
+        return f"<FlashSaleCampaign(id={self.id}, name='{self.name}', spu_id='{self.spu_id}', status='{self.status.value}')>"

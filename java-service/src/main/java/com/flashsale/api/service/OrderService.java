@@ -27,6 +27,7 @@ public class OrderService {
     private final PaymentRepository paymentRepository;
     private final SkuRepository skuRepository;
     private final InventoryRepository inventoryRepository;
+    private final FlashSaleCampaignRepository flashSaleCampaignRepository;
     private final SnowflakeIdGenerator idGenerator;
 
     @Autowired
@@ -36,12 +37,14 @@ public class OrderService {
             PaymentRepository paymentRepository,
             SkuRepository skuRepository,
             InventoryRepository inventoryRepository,
+            FlashSaleCampaignRepository flashSaleCampaignRepository,
             SnowflakeIdGenerator idGenerator) {
         this.orderRepository = orderRepository;
         this.orderLineItemRepository = orderLineItemRepository;
         this.paymentRepository = paymentRepository;
         this.skuRepository = skuRepository;
         this.inventoryRepository = inventoryRepository;
+        this.flashSaleCampaignRepository = flashSaleCampaignRepository;
         this.idGenerator = idGenerator;
     }
 
@@ -71,9 +74,12 @@ public class OrderService {
         order.setShippingAmount(createDto.getShippingAmount());
         order.setCurrency(createDto.getCurrency());
         order.setNotes(createDto.getNotes());
-        order.setFlashSaleId(createDto.getFlashSaleId());
+        // flash_sale_campaign_id will be set automatically if SKU is in active campaign
 
         order = orderRepository.save(order); // Get the order ID
+
+        // Track active campaign for this order (if any)
+        FlashSaleCampaign activeCampaign = null;
 
         // Add line items and calculate totals
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -82,12 +88,46 @@ public class OrderService {
             Sku sku = skuRepository.findByIdWithInventoryAndSpu(itemDto.getSkuId())
                     .orElseThrow(() -> new IllegalArgumentException("SKU " + itemDto.getSkuId() + " not found"));
 
-            // Check inventory
+            // DUAL VALIDATION: Check for active flash sale campaign on this SKU's SPU
+            if (sku.getSpuId() != null) {
+                Optional<FlashSaleCampaign> campaignOpt = flashSaleCampaignRepository.findActiveCampaignForSpu(
+                        sku.getSpuId(),
+                        java.time.LocalDateTime.now()
+                );
+
+                if (campaignOpt.isPresent()) {
+                    FlashSaleCampaign campaign = campaignOpt.get();
+
+                    // SPU-level validation: Check campaign limit
+                    if (campaign.getSoldQuantity() + itemDto.getQuantity() > campaign.getTotalSaleLimit()) {
+                        throw new IllegalStateException(
+                                String.format("Flash sale campaign '%s' limit exceeded. Only %d items remaining.",
+                                        campaign.getName(),
+                                        campaign.getTotalSaleLimit() - campaign.getSoldQuantity())
+                        );
+                    }
+
+                    // Store campaign reference for order
+                    activeCampaign = campaign;
+
+                    // Atomically increment campaign sold_quantity
+                    campaign.setSoldQuantity(campaign.getSoldQuantity() + itemDto.getQuantity());
+
+                    // Update campaign status if sold out
+                    if (campaign.getSoldQuantity() >= campaign.getTotalSaleLimit()) {
+                        campaign.setStatus(FlashSaleStatus.ended);
+                    }
+
+                    flashSaleCampaignRepository.save(campaign);
+                }
+            }
+
+            // SKU-level validation: Check inventory
             if (sku.getTrackInventory() && sku.getInventory() != null) {
                 if (!sku.getInventory().canFulfillQuantity(itemDto.getQuantity())) {
                     throw new IllegalStateException("Insufficient inventory for SKU " + sku.getSkuCode());
                 }
-                
+
                 // Reserve inventory
                 sku.getInventory().reserveQuantity(itemDto.getQuantity());
                 inventoryRepository.save(sku.getInventory());
@@ -113,6 +153,12 @@ public class OrderService {
         // Update order totals
         order.setSubtotal(subtotal);
         order.setTotalAmount(subtotal.add(order.getTaxAmount()).add(order.getShippingAmount()));
+
+        // Link order to campaign if it was part of a flash sale
+        if (activeCampaign != null) {
+            order.setFlashSaleCampaignId(activeCampaign.getId());
+        }
+
         order = orderRepository.save(order);
 
         return getOrderById(order.getId()).orElseThrow();
@@ -195,7 +241,7 @@ public class OrderService {
         dto.setCurrency(order.getCurrency());
         dto.setStatus(order.getStatus());
         dto.setNotes(order.getNotes());
-        dto.setFlashSaleId(order.getFlashSaleId());
+        dto.setFlashSaleCampaignId(order.getFlashSaleCampaignId());
         dto.setCreatedAt(order.getCreatedAt());
         dto.setUpdatedAt(order.getUpdatedAt());
 

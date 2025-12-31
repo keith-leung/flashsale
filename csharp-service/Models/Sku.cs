@@ -34,10 +34,8 @@ public class Sku : BaseEntity
     // Navigation properties
     [ForeignKey(nameof(SpuId))]
     public virtual Spu Spu { get; set; } = null!;
-    
+
     public virtual Inventory? Inventory { get; set; }
-    
-    public virtual ICollection<FlashSaleEvent> FlashSales { get; set; } = new List<FlashSaleEvent>();
-    
+
     public override string ToString() => SkuCode ?? $"SKU-{Id}";
 }

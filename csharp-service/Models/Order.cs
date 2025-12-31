@@ -63,12 +63,13 @@ public class Order : BaseEntity
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
     
     public string? Notes { get; set; }
-    
-    // Flash sale reference (optional)
-    public Guid? FlashSaleId { get; set; }
-    
+
+    // Flash sale campaign reference (optional) - set when order is part of a campaign
+    [Column("flash_sale_campaign_id")]
+    public Guid? FlashSaleCampaignId { get; set; }
+
     // Navigation properties
-    public FlashSaleEvent? FlashSale { get; set; }
+    public FlashSaleCampaign? FlashSaleCampaign { get; set; }
     public ICollection<OrderLineItem> LineItems { get; set; } = new List<OrderLineItem>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

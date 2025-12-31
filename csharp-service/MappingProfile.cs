@@ -23,10 +23,10 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.AvailableQuantity, opt => opt.MapFrom(src => src.Inventory != null ? src.Inventory.AvailableQuantity : (int?)null));
 
         // Flash Sale mappings
-        CreateMap<FlashSaleEventCreateDto, FlashSaleEvent>();
-        CreateMap<FlashSaleEventUpdateDto, FlashSaleEvent>()
+        CreateMap<FlashSaleEventCreateDto, FlashSaleCampaign>();
+        CreateMap<FlashSaleEventUpdateDto, FlashSaleCampaign>()
             .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
-        CreateMap<FlashSaleEvent, FlashSaleEventResponseDto>();
+        CreateMap<FlashSaleCampaign, FlashSaleEventResponseDto>();
 
         // Inventory mappings
         CreateMap<InventoryUpdateDto, Inventory>()

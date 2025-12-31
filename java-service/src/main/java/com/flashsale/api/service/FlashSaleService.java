@@ -1,9 +1,9 @@
 package com.flashsale.api.service;
 
 import com.flashsale.api.dto.FlashSaleDtos.*;
-import com.flashsale.api.entity.FlashSaleEvent;
+import com.flashsale.api.entity.FlashSaleCampaign;
 import com.flashsale.api.entity.FlashSaleStatus;
-import com.flashsale.api.repository.FlashSaleEventRepository;
+import com.flashsale.api.repository.FlashSaleCampaignRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,38 +23,38 @@ public class FlashSaleService {
 
     private static final Logger logger = LoggerFactory.getLogger(FlashSaleService.class);
 
-    private final FlashSaleEventRepository flashSaleEventRepository;
+    private final FlashSaleCampaignRepository flashSaleCampaignRepository;
 
     @Autowired
-    public FlashSaleService(FlashSaleEventRepository flashSaleEventRepository) {
-        this.flashSaleEventRepository = flashSaleEventRepository;
+    public FlashSaleService(FlashSaleCampaignRepository flashSaleCampaignRepository) {
+        this.flashSaleCampaignRepository = flashSaleCampaignRepository;
     }
 
     @Transactional(readOnly = true)
-    public Page<FlashSaleEventResponseDto> getAllFlashSales(int page, int size, FlashSaleStatus status) {
+    public Page<FlashSaleCampaignResponseDto> getAllFlashSales(int page, int size, FlashSaleStatus status) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<FlashSaleEvent> events;
+        Page<FlashSaleCampaign> events;
 
         if (status != null) {
-            events = flashSaleEventRepository.findByStatus(status.name().toLowerCase(), pageable);
+            events = flashSaleCampaignRepository.findByStatus(status, pageable);
         } else {
-            events = flashSaleEventRepository.findAll(pageable);
+            events = flashSaleCampaignRepository.findAll(pageable);
         }
 
         return events.map(this::toResponseDto);
     }
 
     @Transactional(readOnly = true)
-    public Optional<FlashSaleEventResponseDto> getFlashSaleById(Long id) {
-        return flashSaleEventRepository.findById(UUID.fromString(id.toString()))
+    public Optional<FlashSaleCampaignResponseDto> getFlashSaleById(Long id) {
+        return flashSaleCampaignRepository.findById(UUID.fromString(id.toString()))
                 .map(this::toResponseDto);
     }
 
-    public FlashSaleEventResponseDto createFlashSale(FlashSaleEventCreateDto createDto) {
-        FlashSaleEvent event = new FlashSaleEvent();
+    public FlashSaleCampaignResponseDto createFlashSale(FlashSaleCampaignCreateDto createDto) {
+        FlashSaleCampaign event = new FlashSaleCampaign();
         event.setName(createDto.getName());
         event.setDescription(createDto.getDescription());
-        event.setSkuId(createDto.getSkuId());
+        event.setSpuId(createDto.getSpuId());
         event.setTotalSaleLimit(createDto.getTotalSaleLimit());
         event.setMaxQuantityPerCustomer(createDto.getMaxQuantityPerCustomer());
         event.setStartTime(createDto.getStartTime());
@@ -63,14 +63,14 @@ public class FlashSaleService {
         event.setStatus(FlashSaleStatus.scheduled);
         event.setSoldQuantity(0);
 
-        FlashSaleEvent savedEvent = flashSaleEventRepository.save(event);
+        FlashSaleCampaign savedEvent = flashSaleCampaignRepository.save(event);
         logger.info("Created flash sale event with ID: {} and name: {}", savedEvent.getId(), savedEvent.getName());
 
         return toResponseDto(savedEvent);
     }
 
-    public Optional<FlashSaleEventResponseDto> updateFlashSale(Long id, FlashSaleEventUpdateDto updateDto) {
-        return flashSaleEventRepository.findById(UUID.fromString(id.toString()))
+    public Optional<FlashSaleCampaignResponseDto> updateFlashSale(Long id, FlashSaleCampaignUpdateDto updateDto) {
+        return flashSaleCampaignRepository.findById(UUID.fromString(id.toString()))
                 .map(existingEvent -> {
                     if (updateDto.getName() != null) {
                         existingEvent.setName(updateDto.getName());
@@ -97,7 +97,7 @@ public class FlashSaleService {
                         existingEvent.setIsActive(updateDto.getIsActive());
                     }
 
-                    FlashSaleEvent updatedEvent = flashSaleEventRepository.save(existingEvent);
+                    FlashSaleCampaign updatedEvent = flashSaleCampaignRepository.save(existingEvent);
                     logger.info("Updated flash sale event with ID: {}", updatedEvent.getId());
 
                     return toResponseDto(updatedEvent);
@@ -106,8 +106,8 @@ public class FlashSaleService {
 
     public boolean deleteFlashSale(Long id) {
         UUID uuid = UUID.fromString(id.toString());
-        if (flashSaleEventRepository.existsById(uuid)) {
-            flashSaleEventRepository.deleteById(uuid);
+        if (flashSaleCampaignRepository.existsById(uuid)) {
+            flashSaleCampaignRepository.deleteById(uuid);
             logger.info("Deleted flash sale event with ID: {}", id);
             return true;
         }
@@ -116,7 +116,7 @@ public class FlashSaleService {
 
     public PurchaseResponseDto purchaseFromFlashSale(Long id, PurchaseRequestDto purchaseRequest) {
         UUID uuid = UUID.fromString(id.toString());
-        FlashSaleEvent event = flashSaleEventRepository.findById(uuid)
+        FlashSaleCampaign event = flashSaleCampaignRepository.findById(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("Flash sale not found"));
 
         if (!event.isAvailable()) {
@@ -132,7 +132,7 @@ public class FlashSaleService {
             throw new IllegalStateException("Failed to process purchase");
         }
 
-        flashSaleEventRepository.save(event);
+        flashSaleCampaignRepository.save(event);
 
         PurchaseResponseDto response = new PurchaseResponseDto();
         response.setSuccess(true);
@@ -143,12 +143,12 @@ public class FlashSaleService {
         return response;
     }
 
-    private FlashSaleEventResponseDto toResponseDto(FlashSaleEvent event) {
-        FlashSaleEventResponseDto dto = new FlashSaleEventResponseDto();
+    private FlashSaleCampaignResponseDto toResponseDto(FlashSaleCampaign event) {
+        FlashSaleCampaignResponseDto dto = new FlashSaleCampaignResponseDto();
         dto.setId(event.getId());
         dto.setName(event.getName());
         dto.setDescription(event.getDescription());
-        dto.setSkuId(event.getSkuId());
+        dto.setSpuId(event.getSpuId());
         dto.setTotalSaleLimit(event.getTotalSaleLimit());
         dto.setSoldQuantity(event.getSoldQuantity());
         dto.setRemainingQuantity(event.getRemainingQuantity());

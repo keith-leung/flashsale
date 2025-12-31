@@ -32,7 +32,7 @@ public class FlashSaleController {
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully retrieved flash sales")
     })
-    public ResponseEntity<Page<FlashSaleEventResponseDto>> getAllFlashSales(
+    public ResponseEntity<Page<FlashSaleCampaignResponseDto>> getAllFlashSales(
             @Parameter(description = "Page number (0-based)")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size")
@@ -40,7 +40,7 @@ public class FlashSaleController {
             @Parameter(description = "Filter by status")
             @RequestParam(required = false) FlashSaleStatus status) {
         
-        Page<FlashSaleEventResponseDto> flashSales = flashSaleService.getAllFlashSales(page, size, status);
+        Page<FlashSaleCampaignResponseDto> flashSales = flashSaleService.getAllFlashSales(page, size, status);
         return ResponseEntity.ok(flashSales);
     }
 
@@ -50,7 +50,7 @@ public class FlashSaleController {
         @ApiResponse(responseCode = "200", description = "Successfully retrieved flash sale"),
         @ApiResponse(responseCode = "404", description = "Flash sale not found")
     })
-    public ResponseEntity<FlashSaleEventResponseDto> getFlashSaleById(
+    public ResponseEntity<FlashSaleCampaignResponseDto> getFlashSaleById(
             @Parameter(description = "Flash Sale ID")
             @PathVariable Long id) {
         
@@ -65,12 +65,12 @@ public class FlashSaleController {
         @ApiResponse(responseCode = "201", description = "Successfully created flash sale"),
         @ApiResponse(responseCode = "400", description = "Invalid input")
     })
-    public ResponseEntity<FlashSaleEventResponseDto> createFlashSale(
+    public ResponseEntity<FlashSaleCampaignResponseDto> createFlashSale(
             @Parameter(description = "Flash sale creation data")
-            @Valid @RequestBody FlashSaleEventCreateDto createDto) {
+            @Valid @RequestBody FlashSaleCampaignCreateDto createDto) {
         
         try {
-            FlashSaleEventResponseDto createdFlashSale = flashSaleService.createFlashSale(createDto);
+            FlashSaleCampaignResponseDto createdFlashSale = flashSaleService.createFlashSale(createDto);
             return ResponseEntity.status(HttpStatus.CREATED).body(createdFlashSale);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
@@ -84,11 +84,11 @@ public class FlashSaleController {
         @ApiResponse(responseCode = "400", description = "Invalid input"),
         @ApiResponse(responseCode = "404", description = "Flash sale not found")
     })
-    public ResponseEntity<FlashSaleEventResponseDto> updateFlashSale(
+    public ResponseEntity<FlashSaleCampaignResponseDto> updateFlashSale(
             @Parameter(description = "Flash Sale ID")
             @PathVariable Long id,
             @Parameter(description = "Flash sale update data")
-            @Valid @RequestBody FlashSaleEventUpdateDto updateDto) {
+            @Valid @RequestBody FlashSaleCampaignUpdateDto updateDto) {
         
         try {
             return flashSaleService.updateFlashSale(id, updateDto)

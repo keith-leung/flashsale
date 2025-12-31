@@ -1,4 +1,4 @@
-"""Flash Sale Event schemas."""
+"""Flash Sale Campaign schemas - SPU-level campaigns."""
 
 from datetime import datetime
 from typing import Optional
@@ -9,11 +9,11 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from app.models.flash_sale import FlashSaleStatus
 
 
-class FlashSaleEventBase(BaseModel):
-    """Base Flash Sale Event schema."""
+class FlashSaleCampaignBase(BaseModel):
+    """Base Flash Sale Campaign schema."""
     name: str = Field(..., min_length=1, max_length=250)
     description: Optional[str] = None
-    sku_id: UUID
+    spu_id: UUID  # Links to product family (SPU), NOT variant (SKU)!
     total_sale_limit: int = Field(..., gt=0)
     max_quantity_per_customer: int = Field(1, gt=0)
     start_time: datetime
@@ -27,13 +27,13 @@ class FlashSaleEventBase(BaseModel):
         return self
 
 
-class FlashSaleEventCreate(FlashSaleEventBase):
-    """Schema for creating a Flash Sale Event."""
+class FlashSaleCampaignCreate(FlashSaleCampaignBase):
+    """Schema for creating a Flash Sale Campaign."""
     pass
 
 
-class FlashSaleEventUpdate(BaseModel):
-    """Schema for updating a Flash Sale Event."""
+class FlashSaleCampaignUpdate(BaseModel):
+    """Schema for updating a Flash Sale Campaign."""
     name: Optional[str] = Field(None, min_length=1, max_length=250)
     description: Optional[str] = None
     total_sale_limit: Optional[int] = Field(None, gt=0)
@@ -49,8 +49,8 @@ class FlashSaleEventUpdate(BaseModel):
         return self
 
 
-class FlashSaleEventResponse(FlashSaleEventBase):
-    """Schema for Flash Sale Event response."""
+class FlashSaleCampaignResponse(FlashSaleCampaignBase):
+    """Schema for Flash Sale Campaign response."""
     id: UUID
     sold_quantity: int
     remaining_quantity: int
@@ -59,12 +59,16 @@ class FlashSaleEventResponse(FlashSaleEventBase):
     is_available: bool
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class PurchaseRequest(BaseModel):
-    """Schema for purchasing from a flash sale."""
+    """Schema for purchasing from a flash sale campaign.
+
+    NOTE: This endpoint is DEPRECATED - use /api/v1/orders instead!
+    Frontend should NEVER call this endpoint for purchases.
+    """
     quantity: int = Field(..., gt=0)
     customer_id: Optional[str] = None  # Optional customer identification
 
@@ -73,6 +77,6 @@ class PurchaseResponse(BaseModel):
     """Schema for purchase response."""
     success: bool
     message: str
-    flash_sale_id: UUID
+    flash_sale_campaign_id: UUID
     quantity_purchased: int
     remaining_quantity: int

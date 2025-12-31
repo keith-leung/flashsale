@@ -97,14 +97,17 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
             shipping_amount=order_data.shipping_amount or 0,
             total_amount=0,
             currency=order_data.currency,
-            notes=order_data.notes,
-            flash_sale_id=order_data.flash_sale_id
+            notes=order_data.notes
+            # flash_sale_campaign_id will be set automatically if SKU is in active campaign
         )
         db.add(order)
         await db.flush()  # Flush to get the order ID
 
         subtotal = 0
         line_items_to_add = []
+
+        # Track active campaign for this order (if any)
+        active_campaign = None
 
         # Process each line item
         for item_data in order_data.line_items:
@@ -118,7 +121,51 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
                 logger.warning("SKU not found during order creation", extra={"sku_id": str(item_data.sku_id)})
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"SKU {item_data.sku_id} not found")
 
-            # Check and reserve inventory
+            # DUAL VALIDATION: Check for active flash sale campaign on this SKU's SPU
+            if sku.spu_id:
+                from app.models.flash_sale import FlashSaleCampaign, FlashSaleStatus
+                from datetime import datetime
+
+                campaign_result = await db.execute(
+                    select(FlashSaleCampaign).filter(
+                        FlashSaleCampaign.spu_id == str(sku.spu_id),
+                        FlashSaleCampaign.is_active == True,
+                        FlashSaleCampaign.status == FlashSaleStatus.ACTIVE,
+                        FlashSaleCampaign.start_time <= datetime.utcnow(),
+                        FlashSaleCampaign.end_time >= datetime.utcnow()
+                    )
+                )
+                campaign = campaign_result.scalar_one_or_none()
+
+                if campaign:
+                    # SPU-level validation: Check campaign limit
+                    if campaign.sold_quantity + item_data.quantity > campaign.total_sale_limit:
+                        logger.warning(
+                            "Campaign limit exceeded",
+                            extra={
+                                "campaign_id": str(campaign.id),
+                                "campaign_name": campaign.name,
+                                "sold": campaign.sold_quantity,
+                                "limit": campaign.total_sale_limit,
+                                "requested": item_data.quantity
+                            }
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Flash sale campaign '{campaign.name}' limit exceeded. Only {campaign.total_sale_limit - campaign.sold_quantity} items remaining."
+                        )
+
+                    # Store campaign reference for order
+                    active_campaign = campaign
+
+                    # Atomically increment campaign sold_quantity
+                    campaign.sold_quantity += item_data.quantity
+
+                    # Update campaign status if sold out
+                    if campaign.sold_quantity >= campaign.total_sale_limit:
+                        campaign.status = FlashSaleStatus.ENDED
+
+            # SKU-level validation: Check and reserve inventory
             if sku.track_inventory and sku.inventory:
                 if not sku.inventory.can_fulfill_quantity(item_data.quantity):
                     logger.warning(
@@ -126,7 +173,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
                         extra={"sku_code": sku.sku_code, "requested": item_data.quantity, "available": sku.inventory.available_quantity},
                     )
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Insufficient inventory for SKU {sku.sku_code}")
-                
+
                 sku.inventory.reserve_quantity(item_data.quantity)
 
             # Create line item
@@ -151,6 +198,10 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
         # Update order totals
         order.subtotal = subtotal
         order.total_amount = subtotal + order.tax_amount + order.shipping_amount
+
+        # Link order to campaign if it was part of a flash sale
+        if active_campaign:
+            order.flash_sale_campaign_id = active_campaign.id
 
         await db.commit()
         # Eagerly load the line_items relationship for the response model

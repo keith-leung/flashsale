@@ -87,11 +87,6 @@ services:
     networks:
       flash-benchmark-net:
         ipv4_address: 10.88.0.2
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   nginx:
     image: nginx:alpine
@@ -120,7 +115,7 @@ services:
   redis:
     image: redis:alpine
     container_name: flash-redis
-    restart: unless-stopped
+    restart: always
     cpuset: "0-7"  # P-cores for middleware
     cpus: "2.0"
     mem_limit: 2G
@@ -130,11 +125,6 @@ services:
     networks:
       flash-benchmark-net:
         ipv4_address: 10.88.0.3
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ---------------------------------------------------------------------------
   # APPLICATION SERVICES
@@ -144,7 +134,7 @@ services:
       context: ./python-service
       dockerfile: Dockerfile
     container_name: flash-python
-    restart: unless-stopped
+    restart: always
     cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
     cpus: "4.0"
     mem_limit: 4G
@@ -157,17 +147,15 @@ services:
       flash-benchmark-net:
         ipv4_address: 10.88.0.5
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - mariadb
+      - redis
 
   java-service:
     build:
       context: ./java-service
       dockerfile: Dockerfile
     container_name: flash-java
-    restart: unless-stopped
+    restart: always
     cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
     cpus: "4.0"
     mem_limit: 4G
@@ -183,17 +171,15 @@ services:
       flash-benchmark-net:
         ipv4_address: 10.88.0.6
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - mariadb
+      - redis
 
   csharp-service:
     build:
       context: ./csharp-service
       dockerfile: Dockerfile
     container_name: flash-csharp
-    restart: unless-stopped
+    restart: always
     cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
     cpus: "4.0"
     mem_limit: 4G
@@ -203,14 +189,13 @@ services:
       ConnectionStrings__DefaultConnection: "Server=10.88.0.2;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
       ConnectionStrings__Redis: "10.88.0.3:6379"
       ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
     networks:
       flash-benchmark-net:
         ipv4_address: 10.88.0.7
     depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - mariadb
+      - redis
 
 volumes:
   mariadb_data:

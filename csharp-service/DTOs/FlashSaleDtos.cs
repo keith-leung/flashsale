@@ -10,10 +10,10 @@ public class FlashSaleEventCreateDto
     public string Name { get; set; } = string.Empty;
     
     public string? Description { get; set; }
-    
+
     [Required]
-    public Guid SkuId { get; set; }
-    
+    public Guid SpuId { get; set; }
+
     [Required]
     [Range(1, int.MaxValue)]
     public int TotalSaleLimit { get; set; }
@@ -64,7 +64,7 @@ public class FlashSaleEventResponseDto
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public Guid SkuId { get; set; }
+    public Guid SpuId { get; set; }
     public int TotalSaleLimit { get; set; }
     public int SoldQuantity { get; set; }
     public int RemainingQuantity { get; set; }

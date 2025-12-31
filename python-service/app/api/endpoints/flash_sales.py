@@ -9,13 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models.flash_sale import FlashSaleEvent, FlashSaleStatus
-from app.models.sku import SKU
+from app.models.flash_sale import FlashSaleCampaign, FlashSaleStatus
+from app.models.spu import SPU
 from app.models.inventory import Inventory
 from app.schemas.flash_sale import (
-    FlashSaleEventCreate,
-    FlashSaleEventUpdate,
-    FlashSaleEventResponse,
+    FlashSaleCampaignCreate,
+    FlashSaleCampaignUpdate,
+    FlashSaleCampaignResponse,
     PurchaseRequest,
     PurchaseResponse
 )
@@ -24,7 +24,7 @@ from app.schemas.response import ResponseDTO
 router = APIRouter()
 
 
-@router.get("", response_model=ResponseDTO[List[FlashSaleEventResponse]])
+@router.get("", response_model=ResponseDTO[List[FlashSaleCampaignResponse]])
 async def list_flash_sales(
     skip: int = 0,
     limit: int = 100,
@@ -32,12 +32,12 @@ async def list_flash_sales(
     db: AsyncSession = Depends(get_db)
 ):
     """List all flash sale events."""
-    query = select(FlashSaleEvent)
+    query = select(FlashSaleCampaign)
     
     if status_filter:
-        query = query.filter(FlashSaleEvent.status == status_filter)
+        query = query.filter(FlashSaleCampaign.status == status_filter)
     
-    query = query.offset(skip).limit(limit).order_by(FlashSaleEvent.created_at.desc())
+    query = query.offset(skip).limit(limit).order_by(FlashSaleCampaign.created_at.desc())
     result = await db.execute(query)
     flash_sales = result.scalars().all()
     
@@ -46,16 +46,16 @@ async def list_flash_sales(
         flash_sale.update_status()
 
     await db.commit()
-    flash_sale_responses = [FlashSaleEventResponse.model_validate(fs) for fs in flash_sales]
+    flash_sale_responses = [FlashSaleCampaignResponse.model_validate(fs) for fs in flash_sales]
 
     return ResponseDTO(data=flash_sale_responses)
 
 
-@router.get("/{flash_sale_id}", response_model=ResponseDTO[FlashSaleEventResponse])
+@router.get("/{flash_sale_id}", response_model=ResponseDTO[FlashSaleCampaignResponse])
 async def get_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get a specific flash sale event by ID."""
     result = await db.execute(
-        select(FlashSaleEvent).filter(FlashSaleEvent.id == str(flash_sale_id))
+        select(FlashSaleCampaign).filter(FlashSaleCampaign.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -72,9 +72,9 @@ async def get_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_db)
     return ResponseDTO(data=flash_sale)
 
 
-@router.post("", response_model=ResponseDTO[FlashSaleEventResponse], status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ResponseDTO[FlashSaleCampaignResponse], status_code=status.HTTP_201_CREATED)
 async def create_flash_sale(
-    flash_sale_data: FlashSaleEventCreate,
+    flash_sale_data: FlashSaleCampaignCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new flash sale event."""
@@ -86,7 +86,7 @@ async def create_flash_sale(
             detail="SKU not found"
         )
     
-    flash_sale = FlashSaleEvent(**flash_sale_data.model_dump())
+    flash_sale = FlashSaleCampaign(**flash_sale_data.model_dump())
     flash_sale.update_status()  # Set initial status
     
     db.add(flash_sale)
@@ -96,15 +96,15 @@ async def create_flash_sale(
     return ResponseDTO(status=201, message="Flash sale created successfully", data=flash_sale)
 
 
-@router.put("/{flash_sale_id}", response_model=ResponseDTO[FlashSaleEventResponse])
+@router.put("/{flash_sale_id}", response_model=ResponseDTO[FlashSaleCampaignResponse])
 async def update_flash_sale(
     flash_sale_id: UUID,
-    flash_sale_data: FlashSaleEventUpdate,
+    flash_sale_data: FlashSaleCampaignUpdate,
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing flash sale event."""
     result = await db.execute(
-        select(FlashSaleEvent).filter(FlashSaleEvent.id == str(flash_sale_id))
+        select(FlashSaleCampaign).filter(FlashSaleCampaign.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -136,11 +136,11 @@ async def purchase_flash_sale(
     """Purchase items from a flash sale event."""
     # Get flash sale with related SKU and inventory
     result = await db.execute(
-        select(FlashSaleEvent)
+        select(FlashSaleCampaign)
         .options(
-            selectinload(FlashSaleEvent.sku).selectinload(SKU.inventory)
+            selectinload(FlashSaleCampaign.sku).selectinload(SKU.inventory)
         )
-        .filter(FlashSaleEvent.id == str(flash_sale_id))
+        .filter(FlashSaleCampaign.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     
@@ -218,7 +218,7 @@ async def purchase_flash_sale(
 async def delete_flash_sale(flash_sale_id: UUID, db: AsyncSession = Depends(get_db)):
     """Delete a flash sale event."""
     result = await db.execute(
-        select(FlashSaleEvent).filter(FlashSaleEvent.id == str(flash_sale_id))
+        select(FlashSaleCampaign).filter(FlashSaleCampaign.id == str(flash_sale_id))
     )
     flash_sale = result.scalar_one_or_none()
     

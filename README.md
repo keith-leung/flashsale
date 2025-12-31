@@ -2,6 +2,68 @@
 
 A **complete flash sale e-commerce platform** with identical functionality implemented in **Python, C#, and Java**. Designed for **performance testing and architectural comparison** across different optimization strategies.
 
+> **⚠️ FOR ALL AGENTS:** Read `/versions/CONVENTIONS.md` FIRST before any action. All policies, credentials, and conventions are documented there.
+
+## 🎯 Project Objective
+
+**Primary Challenge**: Handle **100,000 order requests within 1 second** without 503 errors or overselling.
+
+This platform was built to solve a critical e-commerce challenge: implementing a generic and scalable system to support high-traffic "Flash Sale" events with absolute data integrity.
+
+### Business Requirements
+
+1. **Flash Sale Campaign Data Model**
+   - **CRITICAL**: Campaigns are **SPU-level** (product concept), NOT SKU-level (variants)!
+   - **Business Example**: Manager creates campaign for "iPhone 16" (SPU) with 100K total_sale_limit
+   - **Customer Reality**: Customers order "iPhone 16 Black 512GB" or "iPhone 16 Silver 128GB" (SKUs)
+   - **Campaign Tracking**: `total_sale_limit` applies across **ALL SKUs** under that SPU (100K total across all colors/storage variants)
+   - **Why SPU Matters**: Without SPU grouping, managers would need separate campaigns for every variant - impossible to manage at scale!
+   - Support multiple, distinct flash sale campaigns simultaneously
+   - `start_time` and `end_time`: Temporal boundaries for the campaign
+   - Real-time status tracking (Not Started → Active → Sold Out/Ended)
+
+2. **Extreme Concurrency Handling**
+   - A single campaign with 1,000-item limit must correctly handle 100,000 purchase attempts in the first second
+   - Zero overselling - perfect inventory consistency
+   - No 503 errors under peak load
+
+3. **Backward-Compatible Order API**
+   - **CRITICAL**: Frontends ALWAYS use `/api/v1/orders` for ALL purchases (regular AND flash sale)
+   - The frontend never calls flash sale endpoints directly
+   - The backend automatically detects if a SKU is part of an active flash sale campaign
+   - Same endpoint, same request format - transparent to the client
+   - Zero frontend changes required when adding/removing flash sales
+
+4. **High-Performance Sale Status API**
+   - Return real-time campaign state: "Not Started", "Active", "Sold Out", "Ended"
+   - Handle significantly higher read load than the purchase API (10-100× more status checks than purchases)
+   - Zero impact on transaction performance
+
+5. **Dual-Level Inventory Validation**
+   - **SPU-level (Campaign Limit)**: Campaign's `total_sale_limit` not exceeded across ALL variants
+     - Example: iPhone 16 campaign with 100K limit - tracks total across all colors/storage
+   - **SKU-level (Inventory Stock)**: Individual variant's inventory > 0
+     - Example: "iPhone 16 Black 512GB" has 5,000 units in stock
+   - **Both conditions must be met**:
+     - Order "iPhone 16 Black 512GB" (qty: 2) → Check campaign (100K limit) AND SKU inventory (5,000 stock)
+     - If campaign has 99,999 sold: Order succeeds (within campaign limit)
+     - If SKU inventory is 1: Order fails (insufficient stock for qty=2)
+
+6. **Distributed System Requirements**
+   - Absolute data integrity across multiple load-balanced servers
+   - Perfect consistency for both SPU-level campaign limits and SKU-level inventory
+   - Horizontal scalability (add more servers → handle more load)
+   - High availability (no single point of failure)
+
+### Why This Architecture?
+
+This repository implements **multiple architectural variants** to test different approaches to solving the same challenge:
+- **Variant Y (Baseline)**: Database-heavy, minimal caching - establishes the performance floor
+- **Variant X (Redis-Optimized)**: Aggressive caching with batch prefetch - tests cache effectiveness
+- **Future Variants**: Read replicas, async writes, sharding - exploring scalability patterns
+
+Each variant must meet the same business requirements while using different technical strategies.
+
 ## 🏗️ Multi-Variant Architecture
 
 Due to Podman 3.4.4 limitations with static IP allocation, **each architectural variant runs in a dedicated WSL instance** for clean isolation and fair comparison.
@@ -128,55 +190,73 @@ wrk -t12 -c100 -d30s -s csharp-service/wrk_order_script.lua \
 
 | Service | Throughput | Latency (avg) | Total Requests | Success Rate | vs Python |
 |---------|-----------|---------------|----------------|--------------|-----------|
-| **C# (ASP.NET Core)** | **4,912 req/s** | **36.07ms** | 152,900 | 100% | **3.3× faster** |
-| **Java (Spring Boot)** | **3,324 req/s** | **47.42ms** | 103,102 | 100% | **2.3× faster** |
-| **Python (FastAPI)** | 1,470 req/s | 107.32ms | 45,791 | 99.99% | baseline |
+| **Java (Spring Boot)** | **2,764 req/s** | **24.94ms** | 82,920 | 100% | **3.6× faster** |
+| **C# (ASP.NET Core)** | **2,328 req/s** | **38.98ms** | 69,840 | 100% | **3.0× faster** |
+| **Python (FastAPI)** | 767 req/s | 62.49ms | 23,010 | 100% | baseline |
 
 ### Nginx Load Balancer Performance
 
-#### Test Command
+#### Health Endpoint Performance
 
+**Test Command:**
 ```bash
-wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
+wrk -t12 -c25 -d30s --latency https://localhost:8443/health
+```
+
+**Results:**
+| Metric | Value |
+|--------|-------|
+| **Throughput** | 10,106 req/s |
+| **Latency (avg)** | 32.24ms |
+| **Optimal Concurrency** | `-c25` |
+| **Success Rate** | 100% |
+
+#### Order Processing Performance
+
+**Test Command:**
+```bash
+wrk -t4 -c50 -d30s --latency -s /tmp/order_benchmark.lua \
   https://localhost:8443/api/v1/orders
 ```
 
-#### Results (Client → Nginx → Services → Database)
+**Results (Client → Nginx → Services → Database):**
 
 | Metric | Value |
 |--------|-------|
-| **Throughput** | 2,136 req/s |
-| **Latency (avg)** | 65.26ms |
-| **Total Requests** | 66,390 |
-| **Success Rate** | 88.4% |
+| **Throughput** | 1,113 req/s |
+| **Latency (avg)** | 68.32ms |
+| **Optimal Concurrency** | `-t4 -c50` |
+| **Success Rate** | 90.8% |
 | **Load Distribution** | Round-robin (Python, Java, C#) |
 
-**Nginx Overhead Analysis:**
-- Adds ~31ms average latency
-- Reduces throughput from individual service max to 2,136 req/s
-- Lower success rate (88.4%) due to Python being slower in the pool
-- Round-robin distributes load evenly across all three services
+**Nginx Round-Robin Bottleneck Analysis:**
+- **Critical Finding:** Combined throughput (1,113 req/s) constrained by slowest service (Python: 694 req/s)
+- Optimal concurrency must match Python's capacity, not combined capacity of all services
+- Round-robin distributes load evenly, but Python creates backpressure when saturated
+- Error rate (9.2%) indicates Python returning 500 errors under load
+- **Production Implication:** Heterogeneous service pools require dedicated pools per service type
+- Combining fast services (Java: 2,764 req/s, C#: 2,328 req/s) with slow services (Python: 694 req/s) in same pool reduces overall throughput by ~80%
 
 ### Key Findings
 
-1. **C# Performance Leader**
-   - 4,912 req/s throughput with 36ms latency
+1. **Java Performance Leader**
+   - 2,764 req/s throughput with 25ms latency
    - 100% success rate under load
-   - Most cost-effective for production (2-3 instances for 10K req/s)
+   - Most cost-effective for production (4 instances for 10K req/s)
 
-2. **Java Balanced Performance**
-   - 3,324 req/s with 47ms latency
+2. **C# Strong Performance**
+   - 2,328 req/s with 39ms latency
    - 100% success rate
-   - Good middle ground (3-4 instances for 10K req/s)
+   - Good balance (4-5 instances for 10K req/s)
 
 3. **Python Developer Productivity**
-   - 1,470 req/s with 107ms latency
-   - 99.99% success rate (excellent reliability)
-   - Requires 7-8 instances for 10K req/s
+   - 767 req/s with 62ms latency
+   - 100% success rate (excellent reliability)
+   - Requires 13-14 instances for 10K req/s
 
 4. **Database I/O Bottleneck**
    - All services perform 4-7 database queries per order
-   - Performance gap narrows from 17× (/health) to 3.3× (orders)
+   - Performance gap narrows from 10.7× (/health) to 3.6× (orders)
    - Database transactions dominate execution time
    - Proves application code is not the bottleneck
 
@@ -190,16 +270,43 @@ wrk -t12 -c100 -d30s -s python-service/wrk_order_script.lua \
    - Resolves Podman 3.4.4 DNS resolution issues
    - Consistent connectivity across services
 
-7. **Nginx Load Balancer Trade-offs**
-   - Adds SSL termination and load distribution
-   - ~31ms latency overhead
-   - Success rate drops when slower services are in the pool
-   - Consider dedicated pools per service type in production
+7. **Nginx Round-Robin Bottleneck (Critical Finding)**
+   - Health endpoint: 10,106 req/s (optimal: `-c25`)
+   - Order endpoint: 1,113 req/s (optimal: `-t4 -c50`) with 90.8% success rate
+   - **Bottleneck Behavior:** Combined throughput constrained by slowest service (Python)
+   - Optimal concurrency matches Python capacity (694 req/s), not combined capacity (5,551 req/s)
+   - Mixing heterogeneous services (Python + Java + C#) reduces throughput by ~80%
+   - **Production Recommendation:** Use dedicated pools per service type or language
+   - SSL termination adds ~32ms latency overhead for health, ~68ms for orders
 
 8. **Production Capacity Planning**
-   - C#: Most cost-effective at 4,912 req/s per instance
-   - Java: Good balance at 3,324 req/s per instance
-   - Python: Development velocity advantage, 1,470 req/s per instance
+   - Java: Most cost-effective at 2,764 req/s per instance
+   - C#: Good balance at 2,328 req/s per instance
+   - Python: Development velocity advantage, 767 req/s per instance
+
+### Raw Framework Performance Analysis (Upper Bound Limits)
+
+Stress testing the `/health` endpoint revealed the theoretical maximum throughput for each framework configuration. This establishes the "speed of light" for each language before business logic and database I/O are introduced.
+
+| Service | Architecture | Peak Throughput | Optimal Concurrency | Limiting Factor |
+| :--- | :--- | :--- | :--- | :--- |
+| **C#** | ASP.NET Core 8 | **~438,996 req/s** | `-c 600` | Hardware/Network |
+| **Java** | Spring Boot 3.2 | **~190,843 req/s** | `-c 200` | Framework Overhead |
+| **Python** | FastAPI + Uvicorn | **~40,869 req/s** | `-c 100` | Middleware Overhead |
+
+**Key Insights:**
+1.  **C# Scalability**: ASP.NET Core is the undisputed performance leader, handling nearly **439k requests per second** on a single instance. It scales linearly up to `c600` concurrency.
+2.  **Java Efficiency**: Spring Boot delivers excellent performance (~191k req/s), peaking at `c200`. Beyond this, thread contention begins to slightly degrade throughput.
+3.  **Python Plateau**: FastAPI hits a hard ceiling around **41k req/s** at relatively low concurrency (`c100`). This is due to the per-request overhead of the global middleware (UUID generation, async context switching), even when logging is skipped.
+
+**Optimal Benchmark Settings:**
+To reproduce these peak numbers, use the following `wrk` configurations:
+*   **C#**: `wrk -t12 -c600 -d30s http://localhost:8082/health`
+*   **Java**: `wrk -t12 -c200 -d30s http://localhost:8081/health`
+*   **Python**: `wrk -t12 -c100 -d30s http://localhost:8000/health`
+
+**Concurrency Tuning Methodology:**
+These optimal concurrency values were determined by testing multiple levels (e.g., `-c25`, `-c50`, `-c100`, `-c200`, `-c400`, `-c1000`) and observing where throughput plateaus. Each service has a different sweet spot where additional concurrent connections no longer improve req/s and may even degrade performance due to increased contention. Always perform a concurrency sweep when benchmarking to find the true optimal configuration for your specific hardware and workload.
 
 ## 🔍 Order Procedure Analysis (Why Database is the Bottleneck)
 
@@ -297,9 +404,9 @@ await transaction.CommitAsync();
 ### Performance Impact
 
 This "chatty" design explains why:
-- C# loses 311× performance from /health (996K) to orders (3.2K)
-- Java loses 99× performance from /health (172K) to orders (1.7K)
-- Python loses 60× performance from /health (95K) to orders (1.5K)
+- C# loses 189× performance from /health (439K) to orders (2.3K)
+- Java loses 69× performance from /health (191K) to orders (2.8K)
+- Python loses 53× performance from /health (41K) to orders (767)
 
 **The faster the framework, the more database latency dominates.**
 
@@ -365,38 +472,38 @@ podman exec flash-python python -m pytest
 
 Measure maximum throughput with minimal logic to establish the theoretical ceiling.
 
-1. **Python (Direct):** ~54k req/s
+1. **Python (Direct):** ~41k req/s
    ```bash
-   bash python-service/benchmark_health.sh http://localhost:8000/health
+   wrk -t12 -c100 -d30s --latency http://localhost:8000/health
    ```
 
-2. **Java (Direct):** ~195k req/s
+2. **Java (Direct):** ~191k req/s
    ```bash
-   bash java-service/test_health.sh
+   wrk -t12 -c200 -d30s --latency http://localhost:8081/health
    ```
 
-3. **C# (Direct):** ~395k req/s
+3. **C# (Direct):** ~439k req/s
    ```bash
-   bash csharp-service/test_health.sh
+   wrk -t12 -c600 -d30s --latency http://localhost:8082/health
    ```
 
 ### Phase 4: Order Processing (Direct Access)
 
 Measure application logic + DB performance (bypassing load balancer). This is the baseline "business logic" performance.
 
-1. **Python (Direct):** ~1,460 req/s
+1. **Python (Direct):** ~767 req/s
    ```bash
-   bash python-service/benchmark_orders.sh http://localhost:8000/api/v1/orders
+   wrk -t12 -c50 -d30s --latency -s /tmp/order_benchmark.lua http://localhost:8000/api/v1/orders
    ```
 
-2. **Java (Direct):** ~3,800 req/s
+2. **Java (Direct):** ~2,764 req/s
    ```bash
-   cd java-service && bash benchmark_orders.sh http://localhost:8081/api/v1/orders
+   wrk -t12 -c75 -d30s --latency -s /tmp/order_benchmark.lua http://localhost:8081/api/v1/orders
    ```
 
-3. **C# (Direct):** ~5,700 req/s
+3. **C# (Direct):** ~2,328 req/s
    ```bash
-   cd csharp-service && bash benchmark_orders.sh http://localhost:8082/api/v1/orders
+   wrk -t12 -c25 -d30s --latency -s /tmp/order_benchmark.lua http://localhost:8082/api/v1/orders
    ```
 
 ### Phase 5: "Real Client" Benchmarks (Via Nginx)
@@ -581,13 +688,16 @@ All services expose identical REST APIs:
 - `PUT /api/v1/skus/{id}` - Update SKU
 - `DELETE /api/v1/skus/{id}` - Delete SKU
 
-### Flash Sale Endpoints
-- `GET /api/v1/flash-sales` - List flash sales
-- `POST /api/v1/flash-sales` - Create flash sale
-- `GET /api/v1/flash-sales/{id}` - Get flash sale
-- `PUT /api/v1/flash-sales/{id}` - Update flash sale
-- `POST /api/v1/flash-sales/{id}/purchase` - Purchase from sale
-- `DELETE /api/v1/flash-sales/{id}` - Delete flash sale
+### Flash Sale Campaign Endpoints (Management & Status Only)
+**⚠️ NEVER used for purchasing - use `/api/v1/orders` instead!**
+
+- `GET /api/v1/flash-sales` - List campaigns (for displaying banners)
+- `POST /api/v1/flash-sales` - Create campaign (admin only)
+- `GET /api/v1/flash-sales/{id}` - Get campaign status (for "Sold Out" badges)
+- `PUT /api/v1/flash-sales/{id}` - Update campaign (admin only)
+- `DELETE /api/v1/flash-sales/{id}` - Delete campaign (admin only)
+
+**Note:** These endpoints are for campaign management and status display only. All purchases (regular AND flash sale) go through `/api/v1/orders` endpoint. The backend automatically detects if a SKU belongs to an active campaign.
 
 ### Order Endpoints
 - `GET /api/v1/orders` - List orders
@@ -601,36 +711,78 @@ All services expose identical REST APIs:
 - `POST /api/v1/inventory/{sku_id}/reserve` - Reserve stock
 - `POST /api/v1/inventory/{sku_id}/release` - Release reserved stock
 
-## 💡 Technology Choices
+## ⚙️ Business Logic
 
-### Why MariaDB with InnoDB?
+### Flash Sale State Management
 
-**Optimized for flash sale performance:**
-- **Row-level locking**: Prevents overselling with minimal contention
-- **MVCC**: Multiple reads during writes
-- **ACID compliance**: Data integrity during inventory updates
-- **Proven at scale**: Battle-tested for e-commerce
+Flash sales automatically transition through states:
+- **Scheduled** → **Active** (when current time >= start_time)
+- **Active** → **Ended** (when current time >= end_time OR sold_quantity >= total_sale_limit)
+- **Any State** → **Cancelled** (manual cancellation)
 
-### Why Redis?
+### Inventory Management
 
-- High-performance caching
-- Session storage
-- Real-time data access
+- **Available Quantity** = Total Quantity - Reserved Quantity
+- **Reservation System** prevents overselling
+- **Fulfillment Process** reduces both reserved and total quantities
 
-### Why These Frameworks?
+### Concurrency Handling
 
-- **Python/FastAPI**: Rapid development, async support, strong typing
-- **C#/ASP.NET Core**: Enterprise performance, excellent tooling
-- **Java/Spring Boot**: Battle-tested ecosystem, comprehensive features
+- Database-level constraints prevent duplicate slugs/SKU codes
+- Optimistic locking for inventory updates
+- Transaction boundaries for multi-step operations
 
-## 📚 Additional Resources
+## 🧪 Testing Flash Sale Functionality
 
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Multi-WSL setup guide for testing variants
-- **[/versions](versions/)** - Historical benchmark results and iterations
-- **Swagger Docs**:
-  - Python: http://localhost:8000/docs
-  - Java: http://localhost:8081/swagger-ui.html
-  - C#: http://localhost:8082/swagger
+**IMPORTANT**: The frontend ALWAYS uses the `/api/v1/orders` endpoint for all purchases. The backend automatically detects if a SKU is part of an active flash sale and applies the appropriate validation (campaign limits, customer limits, time windows).
+
+### Order API (Handles Both Regular and Flash Sale Purchases)
+
+```bash
+# Same API for regular purchases AND flash sale purchases
+# Backend automatically detects if SKU is in an active flash sale
+curl -X POST "http://localhost:8000/api/v1/orders" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_email": "test@example.com",
+    "customer_name": "Test Customer",
+    "currency": "USD",
+    "line_items": [
+      {
+        "sku_id": "650e8400-e29b-41d4-a716-446655440001",
+        "quantity": 2
+      }
+    ]
+  }'
+
+# Backend logic:
+# 1. Check if SKU is part of active flash sale campaign
+# 2. If YES: Validate campaign limits (total_sale_limit, max_quantity_per_customer, time window)
+# 3. If NO: Process as regular order
+# 4. Always validate SKU-level inventory
+# 5. Create order with proper atomicity
+```
+
+### Flash Sale Status API (Read-Only, High Performance)
+
+```bash
+# Check campaign status (NOT for purchasing)
+# Used by frontend to display "Sold Out", "Active", "Ended" badges
+curl http://localhost:8000/api/v1/flash-sales/{flash_sale_id}
+
+# List active campaigns (for displaying flash sale banners)
+curl http://localhost:8000/api/v1/flash-sales?status=active
+```
+
+### Testing Overselling Protection
+
+```bash
+# 1. Create a flash sale campaign with total_sale_limit=100
+# 2. Send 1000 concurrent requests to /api/v1/orders with flash sale SKU
+# 3. Verify exactly 100 orders created (no more, no less)
+# 4. Verify 900 requests receive "campaign limit exceeded" error
+# 5. Verify zero inventory inconsistencies across all services
+```
 
 ## 🎯 Inspired by Saleor
 

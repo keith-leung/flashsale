@@ -18,11 +18,11 @@ public abstract class BaseEntity {
     private UUID id;
 
     @CreatedDate
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false, insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @LastModifiedDate
-    @Column(nullable = false)
+    @Column(nullable = false, insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
     public UUID getId() {

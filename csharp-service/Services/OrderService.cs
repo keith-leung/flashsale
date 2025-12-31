@@ -25,7 +25,7 @@ public class OrderService : IOrderService
     {
         var query = _context.Orders
             .Include(o => o.LineItems)
-            .Include(o => o.FlashSale)
+            .Include(o => o.FlashSaleCampaign)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(customerEmail))
@@ -46,7 +46,7 @@ public class OrderService : IOrderService
     {
         var order = await _context.Orders
             .Include(o => o.LineItems)
-            .Include(o => o.FlashSale)
+            .Include(o => o.FlashSaleCampaign)
             .FirstOrDefaultAsync(o => o.Id == id);
 
         return order == null ? null : _mapper.Map<OrderResponseDto>(order);
@@ -70,12 +70,15 @@ public class OrderService : IOrderService
                 TaxAmount = dto.TaxAmount,
                 ShippingAmount = dto.ShippingAmount,
                 Currency = dto.Currency,
-                Notes = dto.Notes,
-                FlashSaleId = dto.FlashSaleId
+                Notes = dto.Notes
+                // flash_sale_campaign_id will be set automatically if SKU is in active campaign
             };
 
             _context.Orders.Add(order);
             await _context.SaveChangesAsync(); // Get the order ID
+
+            // Track active campaign for this order (if any)
+            FlashSaleCampaign? activeCampaign = null;
 
             // Add line items and calculate totals
             decimal subtotal = 0;
@@ -92,14 +95,49 @@ public class OrderService : IOrderService
                     throw new InvalidOperationException($"SKU {itemDto.SkuId} not found");
                 }
 
-                // Check inventory
+                // DUAL VALIDATION: Check for active flash sale campaign on this SKU's SPU
+                if (sku.SpuId != null)
+                {
+                    var now = DateTime.UtcNow;
+                    var campaign = await _context.FlashSaleCampaigns
+                        .FirstOrDefaultAsync(c =>
+                            c.SpuId == sku.SpuId &&
+                            c.IsActive == true &&
+                            c.Status == FlashSaleStatus.Active &&
+                            c.StartTime <= now &&
+                            c.EndTime >= now);
+
+                    if (campaign != null)
+                    {
+                        // SPU-level validation: Check campaign limit
+                        if (campaign.SoldQuantity + itemDto.Quantity > campaign.TotalSaleLimit)
+                        {
+                            throw new InvalidOperationException(
+                                $"Flash sale campaign '{campaign.Name}' limit exceeded. Only {campaign.TotalSaleLimit - campaign.SoldQuantity} items remaining.");
+                        }
+
+                        // Store campaign reference for order
+                        activeCampaign = campaign;
+
+                        // Atomically increment campaign sold_quantity
+                        campaign.SoldQuantity += itemDto.Quantity;
+
+                        // Update campaign status if sold out
+                        if (campaign.SoldQuantity >= campaign.TotalSaleLimit)
+                        {
+                            campaign.Status = FlashSaleStatus.Ended;
+                        }
+                    }
+                }
+
+                // SKU-level validation: Check inventory
                 if (sku.TrackInventory && sku.Inventory != null)
                 {
                     if (!sku.Inventory.CanFulfillQuantity(itemDto.Quantity))
                     {
                         throw new InvalidOperationException($"Insufficient inventory for SKU {sku.SkuCode}");
                     }
-                    
+
                     // Reserve inventory
                     sku.Inventory.ReserveQuantity(itemDto.Quantity);
                 }
@@ -126,6 +164,12 @@ public class OrderService : IOrderService
             // Update order totals
             order.Subtotal = subtotal;
             order.TotalAmount = subtotal + order.TaxAmount + order.ShippingAmount;
+
+            // Link order to campaign if it was part of a flash sale
+            if (activeCampaign != null)
+            {
+                order.FlashSaleCampaignId = activeCampaign.Id;
+            }
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();

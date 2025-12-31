@@ -1,0 +1,14 @@
+"""Main API router."""
+
+from fastapi import APIRouter
+
+from app.api.endpoints import spus, skus, flash_sales, inventory, orders
+
+api_router = APIRouter()
+
+# Include all endpoint routers
+api_router.include_router(spus.router, prefix="/spus", tags=["SPUs"])
+api_router.include_router(skus.router, prefix="/skus", tags=["SKUs"])
+api_router.include_router(flash_sales.router, prefix="/flash-sales", tags=["Flash Sales"])
+api_router.include_router(inventory.router, prefix="/inventory", tags=["Inventory"])
+api_router.include_router(orders.router, prefix="/orders", tags=["Orders"])

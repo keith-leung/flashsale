@@ -4,23 +4,29 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace FlashSale.Api.Models;
 
 /// <summary>
-/// Flash Sale Event with time-based controls and sale limits
+/// Flash Sale Campaign - SPU-level (product family) with time-based controls and sale limits.
+///
+/// CRITICAL: Campaigns are SPU-level, NOT SKU-level!
+/// Example: Campaign for "iPhone 16" (SPU) with 100K total_sale_limit
+///          Customers order "iPhone 16 Black 512GB" or "iPhone 16 Silver 128GB" (SKUs)
+///          Campaign tracks total across ALL SKUs under the SPU
 /// </summary>
-public class FlashSaleEvent : BaseEntity
+[Table("flash_sale_campaigns")]
+public class FlashSaleCampaign : BaseEntity
 {
     [Required]
     [MaxLength(250)]
     public string Name { get; set; } = string.Empty;
-    
+
     public string? Description { get; set; }
-    
+
     [Required]
-    public Guid SkuId { get; set; }
-    
+    public Guid SpuId { get; set; }  // Links to product family (SPU), NOT variant (SKU)!
+
     [Required]
-    public int TotalSaleLimit { get; set; } // Total units available for this flash sale
-    
-    public int SoldQuantity { get; set; } = 0; // Units sold so far
+    public int TotalSaleLimit { get; set; } // Total units across ALL SKUs under this SPU
+
+    public int SoldQuantity { get; set; } = 0; // Incremented when ANY SKU under this SPU is ordered
     
     public int MaxQuantityPerCustomer { get; set; } = 1; // Max per customer
     
@@ -33,10 +39,10 @@ public class FlashSaleEvent : BaseEntity
     public FlashSaleStatus Status { get; set; } = FlashSaleStatus.Scheduled;
     
     public bool IsActive { get; set; } = true;
-    
+
     // Navigation properties
-    [ForeignKey(nameof(SkuId))]
-    public virtual Sku Sku { get; set; } = null!;
+    [ForeignKey(nameof(SpuId))]
+    public virtual Spu Spu { get; set; } = null!;  // Links to product family
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
     
     // Calculated properties
