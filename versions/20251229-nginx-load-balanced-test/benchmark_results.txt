@@ -1,0 +1,14 @@
+Running 10s test @ https://localhost:8444/api/v1/orders
+  12 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    27.23ms   35.35ms 209.58ms   85.78%
+    Req/Sec   518.27    184.49     1.11k    66.00%
+  Latency Distribution
+     50%   13.87ms
+     75%   37.62ms
+     90%   77.73ms
+     99%  153.70ms
+  62257 requests in 10.08s, 15.14MB read
+  Non-2xx or 3xx responses: 52310
+Requests/sec:   6178.19
+Transfer/sec:      1.50MB

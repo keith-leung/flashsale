@@ -12,13 +12,15 @@ public class OrderService : IOrderService
     private readonly IMapper _mapper;
     private readonly ILogger<OrderService> _logger;
     private readonly CSharpSnowflakeGenerator _idGenerator;
+    private readonly RedisCacheService _redisCache;
 
-    public OrderService(FlashSaleDbContext context, IMapper mapper, ILogger<OrderService> logger, CSharpSnowflakeGenerator idGenerator)
+    public OrderService(FlashSaleDbContext context, IMapper mapper, ILogger<OrderService> logger, CSharpSnowflakeGenerator idGenerator, RedisCacheService redisCache)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
         _idGenerator = idGenerator;
+        _redisCache = redisCache;
     }
 
     public async Task<IEnumerable<OrderResponseDto>> GetAllAsync(int skip = 0, int take = 100, string? customerEmail = null)
@@ -52,15 +54,58 @@ public class OrderService : IOrderService
         return order == null ? null : _mapper.Map<OrderResponseDto>(order);
     }
 
+    /// <summary>
+    /// Create order with intelligent routing:
+    /// - If SKU is in active flash sale campaign → Use Variant X (Redis atomic counters)
+    /// - Otherwise → Use Variant Y (database transaction)
+    /// Frontend sees same API, backend handles routing transparently.
+    /// </summary>
     public async Task<OrderResponseDto> CreateAsync(OrderCreateDto dto)
     {
+        var orderNumber = $"ORD-{_idGenerator.Generate()}";
+
+        // Step 1: Check if ANY SKU is in active flash sale campaign
+        var skuIds = dto.LineItems.Select(item => item.SkuId).ToList();
+
+        Guid? flashSaleId = null;
+        bool useVariantX = false;
+
+        foreach (var skuId in skuIds)
+        {
+            var meta = await _redisCache.GetSkuMetaAsync(skuId);
+            if (meta != null && meta.ContainsKey("flash_sale_id") && meta.GetValueOrDefault("status") == "active")
+            {
+                flashSaleId = Guid.Parse(meta["flash_sale_id"]);
+                useVariantX = true;
+                _logger.LogInformation("SKU {SkuId} is in active flash sale {FlashSaleId}, using Variant X", skuId, flashSaleId);
+                break;
+            }
+        }
+
+        if (useVariantX && flashSaleId.HasValue)
+        {
+            // VARIANT X: Redis Atomic Counters (Flash Sale Path)
+            return await CreateOrderVariantXAsync(dto, orderNumber, flashSaleId.Value);
+        }
+        else
+        {
+            // VARIANT Y: Database Transaction (Regular Order Path)
+            return await CreateOrderVariantYAsync(dto, orderNumber);
+        }
+    }
+
+    /// <summary>
+    /// Variant Y: Traditional database transaction path (4-7 queries per order).
+    /// Used for regular orders when SKU is NOT in active flash sale.
+    /// </summary>
+    private async Task<OrderResponseDto> CreateOrderVariantYAsync(OrderCreateDto dto, string orderNumber)
+    {
         using var transaction = await _context.Database.BeginTransactionAsync();
-        
+
         try
         {
-            // Generate order number using Snowflake ID
-            var orderNumber = $"ORD-{_idGenerator.Generate()}";
-            
+            _logger.LogInformation("Using Variant Y (database) for order {OrderNumber}", orderNumber);
+
             // Create order
             var order = new Order
             {
@@ -174,7 +219,7 @@ public class OrderService : IOrderService
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            _logger.LogInformation("Created order {OrderNumber} for {CustomerEmail}", orderNumber, dto.CustomerEmail);
+            _logger.LogInformation("Created order {OrderNumber} for {CustomerEmail} (Variant Y)", orderNumber, dto.CustomerEmail);
 
             // Return the created order with line items
             var createdOrder = await GetByIdAsync(order.Id);
@@ -183,6 +228,97 @@ public class OrderService : IOrderService
         catch
         {
             await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Variant X: Redis atomic counters path (0 database queries during flash sale).
+    /// Used when SKU is in active flash sale campaign.
+    /// </summary>
+    private async Task<OrderResponseDto> CreateOrderVariantXAsync(OrderCreateDto dto, string orderNumber, Guid flashSaleId)
+    {
+        _logger.LogInformation("Using Variant X (Redis) for order {OrderNumber}, flash sale {FlashSaleId}", orderNumber, flashSaleId);
+
+        // Step 1: Reserve from campaign limit
+        var totalQuantity = dto.LineItems.Sum(item => item.Quantity);
+        var campaignRemaining = await _redisCache.ReserveCampaignInventoryAsync(flashSaleId, totalQuantity);
+
+        if (campaignRemaining < 0)
+        {
+            _logger.LogWarning("Campaign {FlashSaleId} sold out, remaining: {Remaining}", flashSaleId, campaignRemaining);
+            throw new InvalidOperationException("Flash sale campaign sold out");
+        }
+
+        // Step 2: Reserve each SKU inventory
+        var reservedSkus = new List<(Guid SkuId, int Quantity)>();
+
+        try
+        {
+            foreach (var itemDto in dto.LineItems)
+            {
+                var skuRemaining = await _redisCache.ReserveSkuInventoryAsync(itemDto.SkuId, itemDto.Quantity);
+
+                if (skuRemaining < 0)
+                {
+                    // Rollback: Release all reserved inventory
+                    foreach (var (skuId, quantity) in reservedSkus)
+                    {
+                        await _redisCache.ReleaseSkuInventoryAsync(skuId, quantity);
+                    }
+                    await _redisCache.ReleaseCampaignInventoryAsync(flashSaleId, totalQuantity);
+
+                    throw new InvalidOperationException($"SKU {itemDto.SkuId} sold out");
+                }
+
+                reservedSkus.Add((itemDto.SkuId, itemDto.Quantity));
+            }
+
+            // Step 3: Queue order for async database persistence
+            var lineItems = new List<Dictionary<string, object>>();
+
+            foreach (var itemDto in dto.LineItems)
+            {
+                var skuMeta = await _redisCache.GetSkuMetaAsync(itemDto.SkuId);
+                lineItems.Add(new Dictionary<string, object>
+                {
+                    ["sku_id"] = itemDto.SkuId.ToString(),
+                    ["quantity"] = itemDto.Quantity,
+                    ["unit_price"] = skuMeta?.GetValueOrDefault("price", "0") ?? "0"
+                });
+            }
+
+            var orderPayload = new Dictionary<string, object>
+            {
+                ["order_number"] = orderNumber,
+                ["customer_email"] = dto.CustomerEmail,
+                ["customer_name"] = dto.CustomerName ?? "",
+                ["flash_sale_id"] = flashSaleId.ToString(),
+                ["line_items"] = lineItems
+            };
+
+            await _redisCache.QueueOrderAsync(orderPayload);
+
+            // Step 4: Build response (order will be persisted async)
+            _logger.LogInformation("Order {OrderNumber} reserved successfully (Variant X), queued for persistence", orderNumber);
+
+            return new OrderResponseDto
+            {
+                OrderNumber = orderNumber,
+                CustomerEmail = dto.CustomerEmail,
+                CustomerName = dto.CustomerName,
+                FlashSaleId = flashSaleId,
+                Status = OrderStatus.Pending
+            };
+        }
+        catch
+        {
+            // Rollback all reservations on error
+            foreach (var (skuId, quantity) in reservedSkus)
+            {
+                await _redisCache.ReleaseSkuInventoryAsync(skuId, quantity);
+            }
+            await _redisCache.ReleaseCampaignInventoryAsync(flashSaleId, totalQuantity);
             throw;
         }
     }

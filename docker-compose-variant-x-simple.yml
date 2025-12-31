@@ -1,0 +1,86 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb
+    ports:
+      - "3311:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orange315
+      MYSQL_USER: syracuse
+      MYSQL_PASSWORD: Orange_315_Forever!
+    command: --innodb-buffer-pool-size=1G --max-connections=3000
+    networks:
+      variant-x-net:
+        ipv4_address: 10.89.0.8
+
+  redis:
+    image: redis:alpine
+    container_name: flash-redis
+    networks:
+      variant-x-net:
+        ipv4_address: 10.89.0.3
+
+  python-service:
+    build: ./python-service
+    container_name: flash-python
+    ports:
+      - "30001:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@10.89.0.8:3306/orange315
+      REDIS_URL: redis://10.89.0.3:6379/0
+    command: sh -c "sleep 20 && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    networks:
+      variant-x-net:
+        ipv4_address: 10.89.0.9
+
+  java-service:
+    build: ./java-service
+    container_name: flash-java
+    ports:
+      - "8006:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://10.89.0.8:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: syracuse
+      SPRING_DATASOURCE_PASSWORD: Orange_315_Forever!
+      SPRING_DATA_REDIS_HOST: 10.89.0.3
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_PROFILES_ACTIVE: variant-x
+      DB_HOST: 10.89.0.8
+    networks:
+      variant-x-net:
+        ipv4_address: 10.89.0.10
+
+  csharp-service:
+    build: ./csharp-service
+    container_name: flash-csharp
+    ports:
+      - "30002:80"
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=10.89.0.8;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
+      ConnectionStrings__Redis: "10.89.0.3:6379"
+      Variant: X
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+      DB_HOST: 10.89.0.8
+    networks:
+      variant-x-net:
+        ipv4_address: 10.89.0.11
+
+  nginx:
+    image: nginx:alpine
+    container_name: flash-nginx
+    ports:
+      - "8444:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/nginx:ro
+    networks:
+      variant-x-net:
+        ipv4_address: 10.89.0.12
+
+networks:
+  variant-x-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.89.0.0/24

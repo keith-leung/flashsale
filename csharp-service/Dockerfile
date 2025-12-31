@@ -22,8 +22,9 @@ RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/l
 
 # Create startup script
 RUN echo '#!/bin/sh\n\
-echo "Waiting for database at 10.88.0.2:3306..."\n\
-while ! nc -z 10.88.0.2 3306; do\n\
+DB_HOST=${DB_HOST:-flash-mariadb}\n\
+echo "Waiting for database at ${DB_HOST}:3306..."\n\
+while ! nc -z ${DB_HOST} 3306; do\n\
   sleep 1\n\
 done\n\
 echo "Database is ready!"\n\
