@@ -32,6 +32,14 @@ async def test_sku_for_order():
         yield {"sku_id": sku_id, "spu_id": spu_id}
 
         # Cleanup
+        # First delete all orders associated with this SKU to avoid FK violations
+        from sqlalchemy import text
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("DELETE FROM order_line_items WHERE sku_id = :sku_id"), {"sku_id": sku_id})
+            await session.execute(text("DELETE FROM orders WHERE id NOT IN (SELECT order_id FROM order_line_items)"))
+            await session.commit()
+
         await client.delete(f"/api/v1/spus/{spu_id}")
 
 

@@ -4,6 +4,24 @@ A **complete flash sale e-commerce platform** with identical functionality imple
 
 > **⚠️ FOR ALL AGENTS:** Read `/versions/CONVENTIONS.md` FIRST before any action. All policies, credentials, and conventions are documented there.
 
+## 🔥 SACRED VERIFICATION - Golden Command
+
+**BEFORE ANY WORK, RUN THIS COMMAND:**
+
+```bash
+bash SACRED_VERIFICATION.sh
+```
+
+This idempotent script:
+- ✅ Removes Variant X conflicts (keeps Variant Y golden)
+- ✅ Ensures all services are running
+- ✅ Runs health checks
+- ✅ Runs 29 unit tests
+- ✅ Runs quick performance benchmark
+- ✅ Reports PASS/FAIL with exit codes
+
+**For humans and LLMs across conversation sessions - zero context needed!**
+
 ## 🎯 Project Objective
 
 **Primary Challenge**: Handle **100,000 order requests within 1 second** without 503 errors or overselling.

@@ -35,7 +35,10 @@ builder.Services.AddDbContext<FlashSaleDbContext>(options =>
 builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
 {
     var connectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-    return ConnectionMultiplexer.Connect(connectionString);
+    var options = ConfigurationOptions.Parse(connectionString);
+    options.AbortOnConnectFail = false;
+    options.ConnectTimeout = 5000;
+    return ConnectionMultiplexer.Connect(options);
 });
 
 // Redis Cache Service
@@ -78,7 +81,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthorization();
 app.MapControllers();

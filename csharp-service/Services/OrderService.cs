@@ -141,18 +141,16 @@ public class OrderService : IOrderService
                 }
 
                 // DUAL VALIDATION: Check for active flash sale campaign on this SKU's SPU
-                if (sku.SpuId != null)
-                {
-                    var now = DateTime.UtcNow;
-                    var campaign = await _context.FlashSaleCampaigns
-                        .FirstOrDefaultAsync(c =>
-                            c.SpuId == sku.SpuId &&
-                            c.IsActive == true &&
-                            c.Status == FlashSaleStatus.Active &&
-                            c.StartTime <= now &&
-                            c.EndTime >= now);
+                var now = DateTime.UtcNow;
+                var campaign = await _context.FlashSaleCampaigns
+                    .FirstOrDefaultAsync(c =>
+                        c.SpuId == sku.SpuId &&
+                        c.IsActive == true &&
+                        c.Status == FlashSaleStatus.Active &&
+                        c.StartTime <= now &&
+                        c.EndTime >= now);
 
-                    if (campaign != null)
+                if (campaign != null)
                     {
                         // SPU-level validation: Check campaign limit
                         if (campaign.SoldQuantity + itemDto.Quantity > campaign.TotalSaleLimit)
@@ -173,7 +171,6 @@ public class OrderService : IOrderService
                             campaign.Status = FlashSaleStatus.Ended;
                         }
                     }
-                }
 
                 // SKU-level validation: Check inventory
                 if (sku.TrackInventory && sku.Inventory != null)
@@ -307,7 +304,7 @@ public class OrderService : IOrderService
                 OrderNumber = orderNumber,
                 CustomerEmail = dto.CustomerEmail,
                 CustomerName = dto.CustomerName,
-                FlashSaleId = flashSaleId,
+                FlashSaleCampaignId = flashSaleId,
                 Status = OrderStatus.Pending
             };
         }

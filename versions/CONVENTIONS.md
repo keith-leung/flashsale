@@ -8,6 +8,35 @@ This file contains the SACRED CONVENTIONS that govern this repository. Every act
 
 ---
 
+## 🔥 SACRED VERIFICATION - The Golden Command
+
+**FIRST ACTION IN EVERY SESSION: Run SACRED VERIFICATION**
+
+```bash
+bash SACRED_VERIFICATION.sh
+```
+
+This is the **GOLDEN COMMAND** that ensures Variant Y is ready. It:
+1. Removes any Variant X conflicts (keeps Variant Y sacred)
+2. Ensures all services are running (starts them if needed)
+3. Runs health checks (HTTP + database)
+4. Runs 29 unit tests
+5. Runs quick performance benchmark (5s per service)
+
+**Exit Codes:**
+- `0` = SACRED VERIFICATION PASSED ✅
+- `1` = SACRED VERIFICATION FAILED ❌ (fix issues and re-run)
+
+**Usage Pattern:**
+- Human opens conversation → Run SACRED_VERIFICATION.sh → Get status
+- LLM loses context → Run SACRED_VERIFICATION.sh → Understand system state
+- After code changes → Run SACRED_VERIFICATION.sh → Verify nothing broke
+- Before benchmarks → Run SACRED_VERIFICATION.sh → Ensure ready
+
+**This command is IDEMPOTENT and REPRODUCIBLE across all sessions.**
+
+---
+
 ## File Organization Convention
 
 **STRICT RULE: Only README.md is allowed in the root directory.**

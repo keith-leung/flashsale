@@ -59,7 +59,7 @@ async def get_order(order_id: str, db: AsyncSession = Depends(get_db)):
         .options(
             selectinload(Order.line_items),
             selectinload(Order.payments),
-            selectinload(Order.flash_sale)
+            selectinload(Order.flash_sale_campaign)
         )
         .filter(Order.id == order_id)
     )

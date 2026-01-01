@@ -16,7 +16,7 @@ COPY pyproject.toml .
 
 # Configure poetry: no virtual env (we're in container), no interactive, cache deps
 RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-interaction --no-ansi
+    && poetry install --no-interaction --no-ansi
 
 # Copy application code
 COPY . .
