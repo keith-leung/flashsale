@@ -1,67 +1,47 @@
 # =============================================================================
-# Flash Sale Microservices Platform - Baseline Configuration
-# Services: MariaDB + Redis + Nginx + Python + Java + C#
+# Flash Sale Microservices Platform - Variant Y (Baseline)
+# Docker Desktop Configuration - Stable, DNS-Based Service Discovery
 # =============================================================================
 #
-# ARCHITECTURE: One Variant Per WSL Instance
-# -------------------------------------------
-# Due to Podman 3.4.4 limitations with static IP allocation, each architectural
-# variant runs in a dedicated WSL instance for clean isolation and fair comparison.
+# ARCHITECTURE: Variant Y - Baseline Performance Testing
+# --------------------------------------------------------
+# This is the baseline variant for performance comparison. Each variant runs
+# in complete isolation with dedicated infrastructure.
 #
-# This instance: Baseline variant (standard database-heavy architecture)
-# Duplicate this WSL for other variants (e.g., Redis-optimized, read replicas)
+# PORT ALLOCATION (Variant Y):
+# -----------------------------
+# MariaDB:  3307 (host) → 3306 (container)
+# Python:   8000 (host) → 8000 (container)
+# Java:     8081 (host) → 8080 (container)
+# C#:       8082 (host) → 80 (container)
+# Nginx:    8443 (host) → 443 (container)
 #
-# CPU CORE ALLOCATION STRATEGY (Intel Core Ultra 9 275HX - 24 cores):
-# ---------------------------------------------------------------------
-# Hardware: 8 P-cores (0-7) + 16 E-cores (8-23)
+# FUTURE VARIANTS (Reserved Ports):
+# ----------------------------------
+# Variant X: 3308, 8010, 8011, 8012, 8444
+# Variant Z: 3309, 8020, 8021, 8022, 8445
+# Variant W: 3310, 8030, 8031, 8032, 8446
 #
-# P-CORES (0-7) - Middleware (8 cores):
-#   - MariaDB: CPUs 0-7 (8 cores, 16GB RAM)
-#   - Redis:   CPUs 0-7 (2 cores limit, 2GB RAM)
-#   - Nginx:   CPUs 0-7 (1 core limit, 512MB RAM)
+# NETWORK ARCHITECTURE:
+# ---------------------
+# - Network: flashsale-y-net (Docker managed bridge)
+# - Service Discovery: Docker DNS (no static IPs)
+# - Services reference each other by name: mariadb, python-service, etc.
+# - Complete isolation from other variants
+# - Pure database implementation (no caching layer)
 #
-# E-CORES (8-23) - Applications (16 cores):
-#   - Python Service:  CPUs 8-23 (4 cores limit, 4GB RAM)
-#   - Java Service:    CPUs 8-23 (4 cores limit, 4GB RAM)
-#   - C# Service:      CPUs 8-23 (4 cores limit, 4GB RAM)
+# CPU/MEMORY ALLOCATION:
+# ----------------------
+# Note: cpuset removed for Docker Desktop compatibility
+# CPU limits still enforced via cpus parameter
 #
-# Rationale:
-#   - Middleware (DB, Cache, LB) gets P-cores for maximum I/O throughput
-#   - Applications get E-cores (sufficient for I/O-bound workloads)
-#   - Fair comparison: each variant gets dedicated WSL with same resources
-#   - No port conflicts: all variants use standard ports (8000, 8080, 8082)
-# 3. mysql -h 127.0.0.1 -P 3307 -u syracuse -p orange315 < /tmp/backup.sql
-# 4. Verify: mysql -h 127.0.0.1 -P 3307 -u syracuse -p -e "SHOW DATABASES;"
+# SACRED CREDENTIALS (Immutable):
+# --------------------------------
+# Database: orange315
+# User: syracuse
+# Password: Orange_315_Forever!
 #
-# SSL CERTIFICATE GENERATION:
-# ---------------------------
-# Generate self-signed SSL certificate:
-# mkdir -p ./ssl
-# openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-#   -keyout ./ssl/nginx.key -out ./ssl/nginx.crt \
-#   -subj "/C=US/ST=NY/L=Syracuse/O=FlashSale/CN=localhost"
-#
-# NETWORK VALIDATION:
-# -------------------
-# Test internal network connectivity:
-# docker exec <app-container> ping mariadb
-# docker exec <app-container> nc -zv mariadb 3306
-#
-# PORT SUMMARY TABLE:
-# -------------------
-# Port Mapping:
-# Host → Container
-# 3306 → (reserved for existing WSL MariaDB)
-# 3307 → mariadb:3306 (new podman instance)
-# 6380 → redis:6379
-# 8000 → python-service:8000
-# 8081 → java-service:8080
-# 8082 → csharp-service:80
-# 8443 → nginx:443 (HTTPS)
-#
-# Internal network communication uses service names:
-# - mariadb:3306 (from app containers)
-# - redis:6379 (from app containers)
+# =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
@@ -69,9 +49,8 @@ services:
   # ---------------------------------------------------------------------------
   mariadb:
     image: mariadb:10.11
-    container_name: flash-mariadb
+    container_name: flash-mariadb-y
     restart: always
-    cpuset: "0-7"  # P-cores for middleware (8 P-cores: 0-7)
     cpus: "8.0"
     mem_limit: 16G
     ports:
@@ -83,16 +62,14 @@ services:
       MYSQL_PASSWORD: Orange_315_Forever!
     command: --innodb-buffer-pool-size=13G --max-connections=3000 --innodb-flush-log-at-trx-commit=2
     volumes:
-      - mariadb_data:/var/lib/mysql
+      - mariadb_y_data:/var/lib/mysql
     networks:
-      flash-benchmark-net:
-        ipv4_address: 10.88.0.2
+      - flashsale-y-net
 
   nginx:
     image: nginx:alpine
-    container_name: flash-nginx
+    container_name: flash-nginx-y
     restart: always
-    cpuset: "0-7"  # P-cores for middleware
     cpus: "1.0"
     mem_limit: 512M
     ports:
@@ -101,8 +78,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/ssl/nginx:ro
     networks:
-      flash-benchmark-net:
-        ipv4_address: 10.88.0.4
+      - flashsale-y-net
     depends_on:
       - mariadb
       - python-service
@@ -110,102 +86,73 @@ services:
       - csharp-service
 
   # ---------------------------------------------------------------------------
-  # CACHE LAYER
-  # ---------------------------------------------------------------------------
-  redis:
-    image: redis:alpine
-    container_name: flash-redis
-    restart: always
-    cpuset: "0-7"  # P-cores for middleware
-    cpus: "2.0"
-    mem_limit: 2G
-    # No external port mapping - only accessible internally
-    volumes:
-      - redis_data:/data
-    networks:
-      flash-benchmark-net:
-        ipv4_address: 10.88.0.3
-
-  # ---------------------------------------------------------------------------
-  # APPLICATION SERVICES
+  # APPLICATION SERVICES (Pure Database - No Cache Layer)
   # ---------------------------------------------------------------------------
   python-service:
     build:
       context: ./python-service
       dockerfile: Dockerfile
-    container_name: flash-python
+    container_name: flash-python-y
     restart: always
-    cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
     cpus: "4.0"
     mem_limit: 4G
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@10.88.0.2:3306/orange315
-      REDIS_URL: redis://10.88.0.3:6379/0
+      # Using Docker DNS service names (not IPs)
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@mariadb:3306/orange315
     networks:
-      flash-benchmark-net:
-        ipv4_address: 10.88.0.5
+      - flashsale-y-net
     depends_on:
       - mariadb
-      - redis
 
   java-service:
     build:
       context: ./java-service
       dockerfile: Dockerfile
-    container_name: flash-java
+    container_name: flash-java-y
     restart: always
-    cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
     cpus: "4.0"
     mem_limit: 4G
     ports:
       - "8081:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://10.88.0.2:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      # Using Docker DNS service names (not IPs)
+      SPRING_DATASOURCE_URL: jdbc:mysql://mariadb:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: syracuse
       SPRING_DATASOURCE_PASSWORD: Orange_315_Forever!
-      SPRING_DATA_REDIS_HOST: 10.88.0.3
-      SPRING_DATA_REDIS_PORT: 6379
-      DB_HOST: "10.88.0.2"
+      DB_HOST: mariadb
     networks:
-      flash-benchmark-net:
-        ipv4_address: 10.88.0.6
+      - flashsale-y-net
     depends_on:
       - mariadb
-      - redis
 
   csharp-service:
     build:
       context: ./csharp-service
       dockerfile: Dockerfile
-    container_name: flash-csharp
+    container_name: flash-csharp-y
     restart: always
-    cpuset: "8-23"  # E-cores for applications (16 E-cores: 8-23)
     cpus: "4.0"
     mem_limit: 4G
     ports:
       - "8082:80"
     environment:
-      ConnectionStrings__DefaultConnection: "Server=10.88.0.2;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
-      ConnectionStrings__Redis: "10.88.0.3:6379"
+      # Using Docker DNS service names (not IPs)
+      ConnectionStrings__DefaultConnection: "Server=mariadb;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
       ASPNETCORE_ENVIRONMENT: Development
       DOTNET_USE_POLLING_FILE_WATCHER: "true"
-      DB_HOST: "10.88.0.2"
+      DB_HOST: mariadb
     networks:
-      flash-benchmark-net:
-        ipv4_address: 10.88.0.7
+      - flashsale-y-net
     depends_on:
       - mariadb
-      - redis
 
 volumes:
-  mariadb_data:
-    driver: local
-  redis_data:
+  mariadb_y_data:
     driver: local
 
 networks:
-  flash-benchmark-net:
-    name: podman
-    external: true
+  flashsale-y-net:
+    driver: bridge
+    name: flashsale-y-net

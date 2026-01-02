@@ -10,7 +10,6 @@ from starlette.responses import JSONResponse
 
 from app.api.router import api_router
 from app.core.logging import setup_logging
-from app.core.redis_cache import redis_cache
 
 # Setup structured logging
 setup_logging()
@@ -21,12 +20,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
-    logger.info("Starting Flash Sale Service", extra={"service": "flash-sale-python"})
-    await redis_cache.connect()
+    logger.info("Starting Flash Sale Service (Variant Y - Pure Database)", extra={"service": "flash-sale-python"})
     yield
     # Shutdown
     logger.info("Shutting down Flash Sale Service", extra={"service": "flash-sale-python"})
-    await redis_cache.close()
 
 
 app = FastAPI(

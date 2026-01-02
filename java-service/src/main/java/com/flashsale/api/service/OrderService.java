@@ -133,8 +133,14 @@ public class OrderService {
                 inventoryRepository.save(sku.getInventory());
             }
 
-            // Create line item
-            BigDecimal unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : sku.getPrice();
+            // Create line item with correct pricing
+            // CRITICAL: Use flash_price if this is a campaign order, otherwise use regular SKU price
+            BigDecimal unitPrice;
+            if (activeCampaign != null) {
+                unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : activeCampaign.getFlashPrice();
+            } else {
+                unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : sku.getPrice();
+            }
             BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(itemDto.getQuantity()));
 
             OrderLineItem lineItem = new OrderLineItem();

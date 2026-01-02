@@ -130,7 +130,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
                     select(FlashSaleCampaign).filter(
                         FlashSaleCampaign.spu_id == str(sku.spu_id),
                         FlashSaleCampaign.is_active == True,
-                        FlashSaleCampaign.status == FlashSaleStatus.ACTIVE,
+                        FlashSaleCampaign.status == "active",
                         FlashSaleCampaign.start_time <= datetime.utcnow(),
                         FlashSaleCampaign.end_time >= datetime.utcnow()
                     )
@@ -163,7 +163,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
 
                     # Update campaign status if sold out
                     if campaign.sold_quantity >= campaign.total_sale_limit:
-                        campaign.status = FlashSaleStatus.ENDED
+                        campaign.status = "ended"
 
             # SKU-level validation: Check and reserve inventory
             if sku.track_inventory and sku.inventory:
@@ -176,8 +176,13 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
 
                 sku.inventory.reserve_quantity(item_data.quantity)
 
-            # Create line item
-            unit_price = item_data.unit_price or sku.price
+            # Create line item with correct pricing
+            # CRITICAL: Use flash_price if this is a campaign order, otherwise use regular SKU price
+            if active_campaign:
+                unit_price = item_data.unit_price or active_campaign.flash_price
+            else:
+                unit_price = item_data.unit_price or sku.price
+
             total_price = unit_price * item_data.quantity
             
             line_item = OrderLineItem(

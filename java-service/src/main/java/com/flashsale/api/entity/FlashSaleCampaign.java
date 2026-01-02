@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,10 @@ public class FlashSaleCampaign extends BaseEntity {
     @Min(1)
     @Column(nullable = false)
     private Integer maxQuantityPerCustomer = 1; // Max per customer
+
+    @NotNull
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal flashPrice; // Special campaign price (cheaper than regular SKU price)
 
     @NotNull
     @Column(nullable = false)
@@ -179,6 +184,14 @@ public class FlashSaleCampaign extends BaseEntity {
 
     public void setMaxQuantityPerCustomer(Integer maxQuantityPerCustomer) {
         this.maxQuantityPerCustomer = maxQuantityPerCustomer;
+    }
+
+    public BigDecimal getFlashPrice() {
+        return flashPrice;
+    }
+
+    public void setFlashPrice(BigDecimal flashPrice) {
+        this.flashPrice = flashPrice;
     }
 
     public LocalDateTime getStartTime() {

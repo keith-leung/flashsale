@@ -3,7 +3,6 @@ using FlashSale.Api.Data;
 using FlashSale.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,18 +30,6 @@ builder.Services.AddDbContext<FlashSaleDbContext>(options =>
     options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
         new MySqlServerVersion(new Version(8, 0)))
     .UseSnakeCaseNamingConvention());
-// Redis
-builder.Services.AddSingleton<IConnectionMultiplexer>(provider =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-    var options = ConfigurationOptions.Parse(connectionString);
-    options.AbortOnConnectFail = false;
-    options.ConnectTimeout = 5000;
-    return ConnectionMultiplexer.Connect(options);
-});
-
-// Redis Cache Service
-builder.Services.AddSingleton<RedisCacheService>();
 
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(Program));

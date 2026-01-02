@@ -1,0 +1,7 @@
+endpoint_type,service,peak_throughput_req_s,optimal_concurrency,total_timeouts
+health,python,15727.62,10,0
+health,java,130623.48,100,109
+health,csharp,338356.38,400,0
+order,python,360.70,10,866
+order,java,427.36,50,45
+order,csharp,1801.95,10,0

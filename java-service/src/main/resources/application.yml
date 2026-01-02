@@ -20,17 +20,9 @@ spring:
         format_sql: true
         type:
           preferred_uuid_jdbc_type: CHAR
-
-  data:
-    redis:
-      host: 127.0.0.1
-      port: 6380
-      timeout: 2000ms
-
-  cache:
-    type: redis
-    redis:
-      time-to-live: 600000
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
 
   jackson:
     property-naming-strategy: SNAKE_CASE
@@ -50,7 +42,6 @@ management:
 logging:
   level:
     com.flashsale.api: INFO
-    org.springframework.cache: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 

@@ -27,9 +27,13 @@ public class FlashSaleCampaign : BaseEntity
     public int TotalSaleLimit { get; set; } // Total units across ALL SKUs under this SPU
 
     public int SoldQuantity { get; set; } = 0; // Incremented when ANY SKU under this SPU is ordered
-    
+
     public int MaxQuantityPerCustomer { get; set; } = 1; // Max per customer
-    
+
+    [Required]
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal FlashPrice { get; set; } // Special campaign price (cheaper than regular SKU price)
+
     [Required]
     public DateTime StartTime { get; set; }
     

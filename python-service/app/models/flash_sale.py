@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Column, String, Text, ForeignKey, DateTime, Integer, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime, Integer, Boolean, Enum as SQLEnum, Numeric
 from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.orm import relationship
 
@@ -41,13 +41,14 @@ class FlashSaleCampaign(Base):
     total_sale_limit = Column(Integer, nullable=False)  # Total units across ALL SKUs under this SPU
     sold_quantity = Column(Integer, default=0, nullable=False)  # Incremented when ANY SKU under this SPU is ordered
     max_quantity_per_customer = Column(Integer, default=1, nullable=False)  # Max per customer
+    flash_price = Column(Numeric(10, 2), nullable=False)  # Special campaign price (cheaper than regular SKU price)
 
     # Time constraints
     start_time = Column(DateTime, nullable=False, index=True)
     end_time = Column(DateTime, nullable=False, index=True)
 
     # Status and flags
-    status = Column(SQLEnum(FlashSaleStatus), default=FlashSaleStatus.SCHEDULED, nullable=False, index=True)
+    status = Column(String(20), default="scheduled", nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
@@ -74,7 +75,7 @@ class FlashSaleCampaign(Base):
         """Check if the flash sale is currently available for purchase."""
         return (
             self.is_active
-            and self.status == FlashSaleStatus.ACTIVE
+            and self.status == "active"
             and self.is_time_active
             and self.remaining_quantity > 0
         )
@@ -91,31 +92,31 @@ class FlashSaleCampaign(Base):
         """Record a purchase of the specified quantity."""
         if not self.can_purchase_quantity(quantity):
             return False
-        
+
         self.sold_quantity += quantity
-        
+
         # Update status if sold out
         if self.remaining_quantity == 0:
-            self.status = FlashSaleStatus.ENDED
-            
+            self.status = "ended"
+
         return True
     
     def update_status(self):
         """Update status based on current time and sales."""
         now = datetime.utcnow()
-        
-        if self.status == FlashSaleStatus.CANCELLED:
+
+        if self.status == "cancelled":
             return  # Don't change cancelled status
-        
+
         if now < self.start_time:
-            self.status = FlashSaleStatus.SCHEDULED
+            self.status = "scheduled"
         elif now > self.end_time or self.remaining_quantity == 0:
-            self.status = FlashSaleStatus.ENDED
+            self.status = "ended"
         else:
-            self.status = FlashSaleStatus.ACTIVE
+            self.status = "active"
     
     def __str__(self):
-        return f"{self.name} ({self.status.value})"
+        return f"{self.name} ({self.status})"
 
     def __repr__(self):
-        return f"<FlashSaleCampaign(id={self.id}, name='{self.name}', spu_id='{self.spu_id}', status='{self.status.value}')>"
+        return f"<FlashSaleCampaign(id={self.id}, name='{self.name}', spu_id='{self.spu_id}', status='{self.status}')>"
