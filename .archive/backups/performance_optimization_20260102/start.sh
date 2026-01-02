@@ -9,10 +9,4 @@ while ! nc -z ${TARGET_HOST} 3306; do
 done
 
 echo "Database is ready!"
-exec java \
-  -Xms2G -Xmx3G \
-  -XX:+UseG1GC \
-  -XX:MaxGCPauseMillis=200 \
-  -XX:ParallelGCThreads=8 \
-  -XX:ConcGCThreads=2 \
-  -jar target/flashsale-api-0.0.1-SNAPSHOT.jar
+exec java -jar target/flashsale-api-0.0.1-SNAPSHOT.jar

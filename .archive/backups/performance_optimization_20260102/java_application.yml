@@ -7,13 +7,6 @@ spring:
     username: syracuse
     password: Orange_315_Forever!
     driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 200
-      minimum-idle: 50
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
-      leak-detection-threshold: 60000
 
   jpa:
     hibernate:

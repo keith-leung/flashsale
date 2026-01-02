@@ -160,37 +160,63 @@ Content-Type: application/json
 
 ## 3. Current Performance (Variant Y)
 
-### Latest Benchmark Results (2026-01-02)
-**Test Strategy:** Fixed concurrency sweep  
-**Campaign:** `20260102_fixed_sweep`  
-**Full Results:** `benchmark_results/campaigns/20260102_fixed_sweep/`
+### Latest Benchmark Results (2026-01-02 - Optimized Configuration)
+**Test Strategy:** Adaptive plateau detection
+**Test Date:** 2026-01-02 11:25 UTC
+**Raw Data:** `benchmark_results/variant_Y_raw_20260102_112505.csv`
 
-#### Health Endpoints - Peak Performance
+**Configuration Optimizations Applied:**
+- Docker CPU limits increased (MariaDB: 16 cores, Services: 8-12 cores each)
+- Java HikariCP connection pool: 200 connections (was 10 default)
+- Python workers: Fixed at 16 (matches 8 CPU × 2)
+- Python connection pool: 10 per worker + 5 overflow
+- C# connection pool: 300 max connections
+- Java JVM: G1GC tuning with 2-3G heap
 
-| Service | Peak Throughput | Optimal Concurrency | Total Timeouts |
-|---------|-----------------|---------------------|----------------|
-| PYTHON  | 15,728 req/s    | c=10                | 0              |
-| JAVA    | 130,623 req/s   | c=100               | 109            |
-| CSHARP  | 338,356 req/s   | c=400               | 0              |
-| NGINX   | 9,164 req/s     | c=25                | 0              |
+#### Health Endpoints - Sustained Plateau Performance
 
-#### Order Endpoints - Peak Performance
+| Service | **Plateau Throughput** | Optimal Concurrency | Avg Latency | p99 Latency |
+|---------|------------------------|---------------------|-------------|-------------|
+| **C#**     | **378,580 req/s** | c=1536 | 4.37ms | 9.28ms |
+| **JAVA**   | **183,361 req/s** | c=2000 | 11.40ms | 18.64ms |
+| **PYTHON** | **31,368 req/s**  | c=96   | 6.37ms | 38.92ms |
+| **NGINX**  | **11,380 req/s**  | c=96   | 7.30ms | 10.01ms |
 
-| Service | Peak Throughput | Optimal Concurrency | Total Timeouts |
-|---------|-----------------|---------------------|----------------|
-| PYTHON  | 360.7 req/s     | c=10                | 866            |
-| JAVA    | 427.4 req/s     | c=50                | 45             |
-| CSHARP  | 1,802.0 req/s   | c=10                | 0              |
-| NGINX   | 753.4 req/s     | c=25                | 142            |
+#### Order Endpoints - Sustained Plateau Performance (CORE METRIC)
 
-#### Key Findings
+| Service | **Plateau Throughput** | Optimal Concurrency | Avg Latency | p99 Latency | Timeouts |
+|---------|------------------------|---------------------|-------------|-------------|----------|
+| **C#**     | **1,631 req/s** | c=28  | 14.70ms | 21.43ms | 0 |
+| **JAVA**   | **800 req/s**   | c=48  | 56.14ms | 101.68ms | 0 |
+| **PYTHON** | **536 req/s**   | c=68  | 116.91ms | 265.69ms | 0 |
+| **NGINX**  | **1,266 req/s** | c=144 | 123.40ms | 438.10ms | 0 |
 
-- **C# dominates:** 21.5x faster than Python (health), 5x faster (orders)
-- **Python has critical issues:** 866 timeouts at high concurrency on orders - NOT production ready
-- **Java is most stable:** Consistent 413-427 req/s across all concurrency levels (orders)
-- **Nginx helps Python:** Load balancing provides 2.1x better performance than direct Python access
+#### Key Findings - This is the Baseline to Beat
 
-**Production Recommendation:** Use C# for maximum performance, or Nginx load balancer for high availability.
+**1. Database Operations are the Primary Bottleneck**
+- Health endpoints (no DB): 31K-378K req/s
+- Order endpoints (with DB): 536-1,631 req/s
+- **Performance gap: 58x-232x slower with database operations**
+- Connection pools and CPU limits are NO LONGER bottlenecks
+
+**2. Service Performance Hierarchy**
+- **C# leads:** 1,631 req/s for orders (baseline champion)
+- **Java improved dramatically:** From 427→800 req/s (+87% after connection pool fix)
+- **Python improved significantly:** From 361→536 req/s (+48% after worker/pool tuning)
+- **Nginx adds value:** 1,266 req/s with load balancing across all backends
+
+**3. System is Properly Utilizing Resources**
+- All services hit sustained plateaus (not artificial CPU/connection limits)
+- Zero timeouts across all order processing tests
+- Latency stable and predictable at plateau points
+
+**4. Gap to Goal**
+- **Current Best:** 1,631 req/s (C# orders)
+- **Performance Goal:** 100,000 req/s
+- **Gap Remaining:** **61x improvement needed**
+
+**Challenge to Future Variants:** Can you beat 1,631 req/s for order processing?
+The bottleneck is now database query performance, not application configuration.
 
 ---
 

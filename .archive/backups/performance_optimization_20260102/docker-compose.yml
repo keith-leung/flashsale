@@ -51,7 +51,7 @@ services:
     image: mariadb:10.11
     container_name: flash-mariadb-y
     restart: always
-    cpus: "16.0"
+    cpus: "8.0"
     mem_limit: 16G
     ports:
       - "3307:3306"
@@ -70,7 +70,7 @@ services:
     image: nginx:alpine
     container_name: flash-nginx-y
     restart: always
-    cpus: "2.0"
+    cpus: "1.0"
     mem_limit: 512M
     ports:
       - "8443:443"
@@ -94,7 +94,7 @@ services:
       dockerfile: Dockerfile
     container_name: flash-python-y
     restart: always
-    cpus: "8.0"
+    cpus: "4.0"
     mem_limit: 4G
     ports:
       - "8000:8000"
@@ -112,7 +112,7 @@ services:
       dockerfile: Dockerfile
     container_name: flash-java-y
     restart: always
-    cpus: "8.0"
+    cpus: "4.0"
     mem_limit: 4G
     ports:
       - "8081:8080"
@@ -133,7 +133,7 @@ services:
       dockerfile: Dockerfile
     container_name: flash-csharp-y
     restart: always
-    cpus: "12.0"
+    cpus: "4.0"
     mem_limit: 4G
     ports:
       - "8082:80"

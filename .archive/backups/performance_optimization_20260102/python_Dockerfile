@@ -25,5 +25,5 @@ COPY . .
 EXPOSE 8000
 
 # Run the application with optimized settings for I/O-bound workload
-# Workers = 16 (fixed to match Docker CPU allocation of 8 cores * 2)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 16 --backlog 2048 --limit-concurrency 10000"]
+# Workers = 2 * CPU cores + 1 (optimal for I/O-bound apps)
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $(($(nproc) * 2 + 1)) --backlog 2048 --limit-concurrency 10000"]

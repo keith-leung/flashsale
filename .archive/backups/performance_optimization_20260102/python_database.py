@@ -12,9 +12,9 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Connection pool configuration
-# With 16 workers (fixed for 8 CPU allocation), we need sufficient connections per worker
+# With 48 workers, we need to limit connections per worker
 # Formula: max_workers * (pool_size + max_overflow) < mariadb_max_connections
-# Example: 16 workers * (10 + 5) = 240 connections (safe for max_connections=3000)
+# Example: 48 workers * (2 + 1) = 144 connections (safe for default 151 limit)
 
 if os.getenv("TESTING") or "pytest" in sys.modules:
     # Use NullPool for testing to avoid connection sharing across event loops
@@ -25,8 +25,8 @@ else:
     # AsyncEngine uses AsyncAdaptedQueuePool by default (async-safe)
     pool_class = None  # Let async engine use its default pool
     pool_kwargs = {
-        "pool_size": 10,             # 10 connections per worker (16 workers = 160 base)
-        "max_overflow": 5,           # Allow 5 extra per worker (16 workers = 80 extra)
+        "pool_size": 2,              # 2 connections per worker (48 workers = 96 base)
+        "max_overflow": 1,           # Allow 1 extra per worker (48 workers = 48 extra)
         "pool_timeout": 30.0,        # Wait up to 30s for connection
         "pool_recycle": 3600,        # Recycle connections after 1 hour
         "pool_pre_ping": True,       # Verify connections before use
