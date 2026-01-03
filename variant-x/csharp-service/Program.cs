@@ -46,6 +46,7 @@ var instanceId = builder.Configuration.GetValue<int>("App:InstanceId", 1);
 builder.Services.AddSingleton(new CSharpSnowflakeGenerator(instanceId));
 
 // Services
+builder.Services.AddScoped<RedisCacheService>();
 builder.Services.AddScoped<ISpuService, SpuService>();
 builder.Services.AddScoped<ISkuService, SkuService>();
 builder.Services.AddScoped<IFlashSaleService, FlashSaleService>();

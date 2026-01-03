@@ -1,8 +1,44 @@
-# Adaptive Plateau Detection Testing - Variant Y
+# Adaptive Plateau Detection Testing - THE SACRED VERIFICATION Methodology
+
+## 🔥 CRITICAL: This IS the SACRED VERIFICATION Testing Methodology
+
+**This document defines THE testing methodology for the ENTIRE REPOSITORY.**
+
+### ALL Variants MUST Follow This Methodology
+
+- ✅ **Variant Y:** Uses this methodology (defines SACRED VERIFICATION)
+- ✅ **Variant X:** MUST use this EXACT methodology (same algorithm, same CSV schema)
+- ✅ **Variant Z:** MUST use this EXACT methodology (same algorithm, same CSV schema)
+- ✅ **All Future Variants:** MUST use this EXACT methodology
+
+**Why This is Mandatory:**
+1. **SACRED VERIFICATION defines THE standard testing approach**
+2. **All variants must use the SAME methodology to enable performance comparison**
+3. **Different test methodologies = incomparable results**
+4. **This methodology produces the SACRED CSV schema that all variants must match**
+
+**What "Follow This Methodology" Means:**
+- Same adaptive plateau detection algorithm
+- Same starting parameters (t=4, c=10)
+- Same growth analysis logic (>5%, 2-5%, <2%)
+- Same stopping criteria (plateau confirmed, system limit, max caps)
+- Same CSV schema (27 fields, exact format)
+- Same test sequence (health → orders, individual → nginx)
+
+**NEVER:**
+- ❌ Create different test methodologies for different variants
+- ❌ Use different starting parameters or growth thresholds
+- ❌ Use different CSV schemas or field names
+- ❌ Skip plateau detection in favor of fixed concurrency
+- ❌ Claim performance improvements with non-SACRED methodology
+
+---
 
 ## Overview
 
-Variant Y now implements **intelligent adaptive plateau detection** for performance testing. This system dynamically adjusts test parameters based on real-time throughput analysis to find the true performance plateau or system peak.
+This document describes **intelligent adaptive plateau detection** for performance testing - the SACRED VERIFICATION methodology that ALL variants must implement.
+
+This system dynamically adjusts test parameters based on real-time throughput analysis to find the true performance plateau or system peak.
 
 **Key Principle:** NO QUICK MODE, EVER. Every test run performs comprehensive analysis to find the true plateau.
 
@@ -223,9 +259,28 @@ Explains the adaptive algorithm and decision types.
 
 ---
 
-## Multi-Variant Comparison
+## Multi-Variant Comparison - SACRED Methodology Enables This
 
-The CSV schema is **consistent across all variants** (Y, X, Z, etc.), enabling easy comparison:
+**The CSV schema is consistent across ALL variants because all variants MUST use SACRED methodology.**
+
+**Critical Requirement: ALL variants must:**
+1. Use the SAME adaptive plateau detection algorithm
+2. Produce data in the SAME CSV schema format
+3. Follow the SAME test sequence (health → orders, individual → nginx)
+4. Use the SAME starting parameters and growth thresholds
+
+**This enables direct comparison:**
+
+```bash
+# Because all variants use SACRED methodology, comparison is valid:
+grep ",order," benchmark_results/variant_Y_raw_20260102.csv | awk -F',' '{print $3, $9}'
+grep ",order," benchmark_results/variant_X_raw_20260102.csv | awk -F',' '{print $3, $9}'
+
+# Output (comparable because SACRED-aligned):
+# Variant Y: python 536 req/s, java 800 req/s, csharp 1631 req/s
+# Variant X: python 2400 req/s, java 3100 req/s, csharp 4200 req/s
+#            ↑ 4.5x faster    ↑ 3.9x faster    ↑ 2.6x faster
+```
 
 ### Future: compare_variants.py
 
@@ -234,6 +289,8 @@ python3 compare_variants.py \
     ./benchmark_results/variant_Y_raw_20260102.csv \
     ./benchmark_results/variant_X_raw_20260102.csv
 ```
+
+**This tool works ONLY because all variants use SACRED methodology.**
 
 Output: Side-by-side comparison showing performance delta.
 
@@ -332,6 +389,49 @@ DURATION=30s
 - Allow services to warm up before testing
 - Run multiple times to confirm consistency
 - Use CSV data for statistical analysis
+- **CRITICAL: Ensure NO environment overlapping between variants**
+
+### 4. Environment Isolation - NO OVERLAPPING
+
+**CRITICAL REQUIREMENT: Variants MUST have completely isolated environments.**
+
+**Environment overlapping WILL break SACRED VERIFICATION.**
+
+**What "No Overlapping" Means:**
+- ❌ **NO shared databases** (Variant X and Y cannot share same MariaDB instance)
+- ❌ **NO shared ports** (Variant X cannot use same ports as Variant Y)
+- ❌ **NO shared Redis** (each variant needs its own Redis instance)
+- ❌ **NO shared networks** (each variant needs isolated Docker network)
+- ❌ **NO resource contention** (variants must not compete for CPU/memory)
+
+**Why Environment Overlapping Breaks SACRED VERIFICATION:**
+```
+Scenario: Variant X and Y share same MariaDB on port 3307
+    ↓
+Run Variant X benchmark → High load on shared MariaDB
+    ↓
+Run SACRED VERIFICATION → Variant Y tries to access same MariaDB
+    ↓
+MariaDB is under load from Variant X
+    ↓
+SACRED VERIFICATION FAILS (slow response, connection pool exhausted)
+    ↓
+WRONG CONCLUSION: "Variant Y is broken"
+ACTUAL CAUSE: Environment overlapping (shared database)
+```
+
+**Correct Approach:**
+- Variant Y: MariaDB on port 3307, network 10.88.0.0/24
+- Variant X: MariaDB on port 3312, network 10.89.0.0/24
+- ZERO overlap, ZERO resource contention
+
+**If SACRED VERIFICATION fails after implementing Variant X:**
+1. Check for port conflicts: `netstat -tuln | grep <port>`
+2. Check for shared databases: Review docker-compose.yml
+3. Check for network overlapping: `docker network ls`
+4. Check for resource contention: `docker stats`
+
+**Environment isolation is MANDATORY for SACRED VERIFICATION to work correctly.**
 
 ---
 

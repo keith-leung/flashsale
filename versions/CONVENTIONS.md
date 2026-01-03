@@ -8,7 +8,91 @@ This file contains the SACRED CONVENTIONS that govern this repository. Every act
 
 ---
 
-## 🔥 SACRED VERIFICATION - The Golden Command
+## 🔥 SACRED VERIFICATION - The Repository-Wide Unit Test
+
+### ⚠️ CRITICAL UNDERSTANDING: SACRED VERIFICATION Tests the Entire Environment
+
+**SACRED VERIFICATION is the unit test for the ENTIRE REPOSITORY, not just Variant Y.**
+
+**What SACRED VERIFICATION Actually Tests:**
+- ✅ Tests Variant Y (simplest, most stable implementation)
+- ✅ **Validates the ENTIRE environment** (database, network, ports, Docker, resources)
+- ✅ Acts as environmental health check for ALL variants
+
+**Critical Understanding:**
+```
+If you change Variant X and SACRED VERIFICATION fails
+    ↓
+Your Variant X changes broke the ENVIRONMENT
+    ↓
+The environment approach is WRONG
+    ↓
+Fix infrastructure before proceeding
+```
+
+**Why Variant Y is the Environment Test:**
+- Variant Y is the simplest implementation (pure database transactions)
+- If Variant Y can't run → environment is broken
+- If Variant Y passes → environment is healthy for all variants
+- Variant Y acts as "canary in the coal mine"
+
+**SACRED VERIFICATION validates:**
+- ✅ Port allocations and network configuration
+- ✅ Database connectivity across all services
+- ✅ Docker container orchestration and resource limits
+- ✅ Service dependencies and startup order
+- ✅ No port conflicts between variants
+- ✅ Proper isolation between variant environments
+
+### The Mandatory Workflow for ALL Changes
+
+**BEFORE making changes to ANY variant:**
+```bash
+# 1. Verify environment is healthy BEFORE changes
+bash SACRED_VERIFICATION.sh  # Should PASS
+
+# 2. Make your changes to Variant X (ports, Docker, config, etc.)
+
+# 3. Test if changes broke environment
+bash SACRED_VERIFICATION.sh  # CRITICAL TEST
+    ↓
+    FAILS? → Your changes broke the environment
+            → Revert changes and fix environment approach
+    ↓
+    PASSES? → Environment is still healthy
+             → Safe to test Variant X specifically
+
+# 4. Now test variant-specific functionality
+bash verify_variant_x.sh
+```
+
+**This prevents:**
+- ❌ Port conflicts propagating across variants
+- ❌ Resource contention breaking other services
+- ❌ Network misconfiguration affecting all variants
+- ❌ Database connectivity issues going undetected
+- ❌ Environmental bugs masquerading as code bugs
+
+### ⚠️ SACRED Schema Alignment (Still Required)
+
+**SACRED is defined by Variant Y. ALL variants MUST align with SACRED schema.**
+
+- ✅ **Variant Y:** Defines the SACRED schema (golden standard, immutable)
+- ✅ **Variant X:** MUST use SACRED schema (same tables, same field names, same API)
+- ✅ **All Other Variants:** MUST use SACRED schema (implementation differs, schema aligns)
+
+**Key Distinctions:**
+- **SACRED VERIFICATION** = Repository-wide environment test (tests Variant Y + environment)
+- **Variant X verification** = Variant-specific test (tests X aligns with SACRED)
+- **Variant Z verification** = Variant-specific test (tests Z aligns with SACRED)
+
+**Schema Alignment Requirements:**
+- All variants use `flash_sale_campaign_id` (not `flash_sale_id`)
+- All variants use `flash_sale_campaigns` table (not `flash_sale_events`)
+- All variants use the same API endpoint: `/api/v1/orders`
+- All variants use Syracuse credentials (orange315 database)
+
+### SACRED VERIFICATION Command (Tests Environment + Variant Y)
 
 **FIRST ACTION IN EVERY SESSION: Run SACRED VERIFICATION**
 
@@ -16,7 +100,7 @@ This file contains the SACRED CONVENTIONS that govern this repository. Every act
 bash SACRED_VERIFICATION.sh
 ```
 
-This is the **GOLDEN COMMAND** that ensures Variant Y is ready. It:
+This is the **REPOSITORY-WIDE UNIT TEST** that validates environmental integrity. It:
 1. Removes any Variant X conflicts (keeps Variant Y sacred)
 2. Ensures all services are running (starts them if needed)
 3. Runs health checks (HTTP + database)
@@ -105,14 +189,35 @@ MYSQL_PASSWORD: Orange_315_Forever!
 
 ---
 
-### Policy 1: Variant Y is Sacred - NEVER Break It
+### Policy 1: Variant Y Defines SACRED - All Variants Must Align
 
-**Variant Y must remain functional at ALL times. It serves as the regression test baseline.**
+**Variant Y defines the SACRED schema. ALL variants MUST align with this schema.**
 
-- Variant Y is the baseline implementation that all other variants are compared against
+**CRITICAL DISTINCTIONS:**
+- ✅ **Variant Y:** Defines SACRED (golden baseline, immutable schema)
+- ✅ **Variant X:** MUST align with SACRED schema (different implementation, same schema)
+- ✅ **Other Variants:** MUST align with SACRED schema (different implementation, same schema)
+
+**Variant Y Requirements:**
+- Variant Y must remain functional at ALL times as the regression test baseline
+- Variant Y defines the database schema that ALL variants must follow
 - Making Variant Y non-workable is **STRICTLY FORBIDDEN**
-- All changes must be verified to not break Variant Y functionality
-- If uncertain, test Variant Y first before making any changes
+- All schema changes must be verified to not break Variant Y functionality
+- If uncertain about schema, test Variant Y first before making any changes
+
+**All Variants Must:**
+- Use the same database schema as Variant Y (same tables, same columns, same field names)
+- Use the same API contracts as Variant Y (same endpoints, same request/response formats)
+- Use Syracuse credentials (orange315 database)
+- Support `/api/v1/orders` endpoint with intelligent routing
+
+**Variants Can Differ In:**
+- Implementation approach (Redis atomic counters vs database transactions)
+- Performance optimization strategies
+- Internal service architecture
+- Verification script names (e.g., `verify_variant_x.sh` instead of SACRED_VERIFICATION.sh)
+
+**The ONLY "SACRED VERIFICATION" is for Variant Y.** Other variants have their own named verification scripts.
 
 ---
 
@@ -144,33 +249,119 @@ restart: always  # For ALL services
 
 ---
 
-### Policy 3: Complete Isolation Between Variants
+### Policy 3: Complete Isolation Between Variants - NO OVERLAPPING
 
 **Each variant MUST have its own dedicated infrastructure. NO SHARING of middleware between variants.**
 
+**CRITICAL: Environment overlapping among variants WILL BREAK SACRED VERIFICATION.**
+
+**Mandatory Isolation:**
 - **Dedicated MariaDB per variant** - Each variant gets its own MariaDB instance with its own IP and port
 - **Dedicated Redis per variant** - Each variant gets its own Redis instance with its own IP
 - **Dedicated Nginx per variant** - Each variant gets its own Nginx load balancer
 - **Dedicated application services per variant** - Python, Java, C# services are separate per variant
 - **Dedicated network per variant** - Each variant runs in its own isolated network namespace
+- **NO port conflicts** - Each variant uses different host ports
+- **NO resource contention** - Variants do not compete for CPU/memory/disk
+
+**Why NO OVERLAPPING is Critical for SACRED VERIFICATION:**
+```
+SCENARIO: Variant X shares MariaDB with Variant Y
+    ↓
+Variant X benchmark runs → Heavy database load
+    ↓
+SACRED VERIFICATION runs → Variant Y tries same database
+    ↓
+Database connection pool exhausted from Variant X
+    ↓
+SACRED VERIFICATION FAILS
+    ↓
+WRONG DIAGNOSIS: "Variant Y is broken"
+ACTUAL CAUSE: Environment overlapping (shared database)
+```
+
+**Environment overlapping causes:**
+- ❌ Port conflicts → Services fail to start
+- ❌ Database connection pool exhaustion → SACRED VERIFICATION fails
+- ❌ Network namespace collisions → Container startup failures
+- ❌ Resource contention → Unpredictable performance degradation
+- ❌ False positive failures → SACRED VERIFICATION fails for wrong reasons
 
 **Rationale:**
 - Ensures fair performance comparison without resource contention
 - Prevents one variant from affecting another's performance
 - Allows true side-by-side benchmarking
 - Eliminates cross-variant dependencies
+- **Keeps SACRED VERIFICATION accurate and reliable**
 
 **Examples:**
-- ✅ CORRECT: Variant Y uses 10.88.0.2 MariaDB, Variant X uses 10.89.0.2 MariaDB (separate instances)
-- ❌ WRONG: Variant Y and Variant X both connect to the same MariaDB at 10.88.0.2
+- ✅ CORRECT: Variant Y uses 10.88.0.2 MariaDB:3307, Variant X uses 10.89.0.2 MariaDB:3312 (separate instances, separate ports)
+- ❌ WRONG: Variant Y and Variant X both connect to the same MariaDB at 10.88.0.2:3307 (WILL BREAK SACRED VERIFICATION)
 
 ---
 
-### Policy 4: Mandatory Functionality Verification Before Any Change
+### Policy 4: SACRED VERIFICATION is the Environmental Unit Test
+
+**SACRED VERIFICATION validates the ENTIRE REPOSITORY ENVIRONMENT, not just Variant Y.**
+
+**Critical Rule:**
+- When you make changes to ANY variant (X, Z, etc.) and SACRED VERIFICATION fails
+- It means your changes broke the ENVIRONMENT (ports, network, Docker, database, resources)
+- It does NOT mean Variant Y's code is broken
+- The environmental approach is WRONG and must be fixed
+
+**Mandatory Workflow:**
+1. Run SACRED VERIFICATION **before** making changes (establishes baseline)
+2. Make changes to Variant X (or any variant)
+3. Run SACRED VERIFICATION **after** changes (validates environment integrity)
+   - ✅ PASSES → Environment is healthy, proceed to variant-specific verification
+   - ❌ FAILS → Your changes broke the environment, revert and fix infrastructure
+4. Run variant-specific verification (e.g., `verify_variant_x.sh`)
+
+**Why This Matters:**
+- Variant Y is the simplest implementation (pure database transactions)
+- If the simplest implementation can't run, the environment is misconfigured
+- Catching environmental issues early prevents them from propagating across all variants
+- Separates environmental problems from code problems
+
+**Examples of Environmental Issues SACRED VERIFICATION Detects:**
+- Port conflicts between variants
+- Network isolation failures
+- Database connection pool exhaustion
+- Docker resource limits too low
+- Service startup dependency issues
+- CPU/memory contention between variants
+
+### Policy 5: Mandatory Functionality Verification Before Any Change
 
 **BEFORE any change is committed, it MUST pass the complete functionality benchmark.**
 
-Every change must be verified with this complete test sequence:
+**CRITICAL REQUIREMENT: All variant test procedures MUST align with SACRED VERIFICATION format.**
+
+**Why This Matters:**
+- SACRED VERIFICATION defines the standard test procedure and raw data format
+- All variants must follow the SAME test steps, parameters, and data format
+- This enables direct performance comparison across variants
+- Raw CSV data must be comparable (same columns, same metrics, same test conditions)
+- Without alignment, performance comparisons are meaningless
+
+**What "Align with SACRED VERIFICATION" Means:**
+1. **Same test sequence:** All variants use the same 4-step procedure as SACRED VERIFICATION
+2. **Same test parameters:** Same concurrency levels, duration, endpoints
+3. **Same data format:** Raw results must match SACRED VERIFICATION's CSV schema
+4. **Same success criteria:** Same performance thresholds and error rate limits
+5. **Same measurement approach:** wrk with same flags, same Lua scripts
+
+**Example - Why Alignment is Required:**
+```
+❌ WRONG: Variant X tests health with -c50, Variant Y with -c100
+         → Cannot compare performance (different load conditions)
+
+✅ CORRECT: Both variants test health with -c100 at same duration
+           → Performance comparison is valid and meaningful
+```
+
+Every change must be verified with this complete test sequence (aligned with SACRED VERIFICATION):
 
 #### Step 1: Individual Service Health Benchmarks
 **Use wrk for performance testing with OPTIMAL concurrency, NOT just curl!**
@@ -249,9 +440,48 @@ wrk -t4 -c50 -d30s --latency -s /tmp/order_benchmark.lua https://localhost:8443/
 - **Critical Understanding:** Nginx round-robin throughput matches slowest service capacity, NOT combined capacity
 - Optimal concurrency: `-t4 -c50` (matches Python's capacity, not combined)
 
+#### SACRED VERIFICATION Raw Data Format
+
+**All variant verifications MUST produce data in the same format as SACRED VERIFICATION.**
+
+**Standard CSV Schema:**
+```csv
+timestamp,variant,service,endpoint,test_type,threads,concurrency,
+duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,
+p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,
+total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,
+socket_errors_read,socket_errors_write,socket_errors_timeout,
+transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+```
+
+**Why This Format is Mandatory:**
+1. **Cross-variant comparison:** Same columns enable direct performance comparison
+2. **Automated analysis:** Tools can process all variant data uniformly
+3. **Regression detection:** Compare new results against SACRED baseline
+4. **Performance trending:** Track improvements/degradations over time
+5. **Standardized reporting:** Generate consistent reports across all variants
+
+**Example - Performance Comparison Enabled by Format Alignment:**
+```bash
+# Compare order creation performance across variants
+grep ",order," benchmark_results/variant_Y_raw_*.csv | awk -F',' '{print $3, $9}'
+grep ",order," benchmark_results/variant_X_raw_*.csv | awk -F',' '{print $3, $9}'
+
+# Output (comparable because same format):
+# Variant Y: python 536 req/s, java 800 req/s, csharp 1631 req/s
+# Variant X: python 2400 req/s, java 3100 req/s, csharp 4200 req/s
+#            ↑ 4.5x faster    ↑ 3.9x faster    ↑ 2.6x faster
+```
+
+**If variant tests don't align with SACRED format:**
+- ❌ Cannot compare performance metrics
+- ❌ Cannot validate performance improvements
+- ❌ Cannot use standard analysis tools
+- ❌ Cannot prove variant X is better than variant Y
+
 ---
 
-### Policy 5: Changes Without Verification Are STRICTLY FORBIDDEN
+### Policy 6: Changes Without Verification Are STRICTLY FORBIDDEN
 
 **If you cannot run the full functionality benchmark, you CANNOT make the change.**
 
@@ -260,7 +490,7 @@ wrk -t4 -c50 -d30s --latency -s /tmp/order_benchmark.lua https://localhost:8443/
 - No changes during downtimes - wait until you can test
 - Document test results in commit messages
 
-### Policy 6: API Backward Compatibility - Order API is Universal
+### Policy 7: API Backward Compatibility - Order API is Universal
 
 **CRITICAL ARCHITECTURAL DECISION: The frontend ALWAYS uses `/api/v1/orders` for ALL purchases.**
 
@@ -571,34 +801,47 @@ wrk -t4 -c100 -d30s -s python-service/wrk_order_script.lua https://localhost:844
 ## Forbidden Practices
 
 ### ❌ NEVER DO THESE:
-1. Share MariaDB between variants
-2. Share Redis between variants
-3. Share Nginx between variants
-4. Make changes without testing Variant Y
-5. Commit without running full functionality benchmark
-6. Use non-standard IP patterns
-7. Skip documentation updates
-8. Assume "it should work" without verification
-9. Make changes while services are down
-10. Batch multiple changes without testing each one
-11. Change Syracuse credentials for ANY reason
-12. Create MD files outside of /versions/
-13. Use restart policies other than "always"
+1. **Make changes to ANY variant without running SACRED VERIFICATION first**
+2. **Skip SACRED VERIFICATION after making changes** (must validate environment)
+3. **Test variants with different parameters than SACRED VERIFICATION** (breaks comparability)
+4. **Use different CSV format than SACRED VERIFICATION** (breaks analysis tools)
+5. **Create environment overlapping between variants** (WILL BREAK SACRED VERIFICATION)
+6. Share MariaDB between variants (environment overlapping)
+7. Share Redis between variants (environment overlapping)
+8. Share Nginx between variants (environment overlapping)
+9. Use same ports for different variants (environment overlapping)
+10. Make changes without testing Variant Y
+11. Commit without running full functionality benchmark
+12. Use non-standard IP patterns
+13. Skip documentation updates
+14. Assume "it should work" without verification
+15. Make changes while services are down
+16. Batch multiple changes without testing each one
+17. Change Syracuse credentials for ANY reason
+18. Create MD files outside of /versions/
+19. Use restart policies other than "always"
+20. **Assume SACRED VERIFICATION only tests Variant Y** (it tests the ENTIRE environment)
+21. **Claim performance improvements without SACRED-aligned data** (unprovable)
 
 ### ✅ ALWAYS DO THESE:
-1. Test Variant Y before and after changes
-2. Run complete functionality benchmark (all 4 steps)
-3. Document IP allocations
-4. Use dedicated infrastructure per variant
-5. Follow standard IP allocation pattern
-6. Record benchmark results
-7. Revert immediately if Variant Y breaks
-8. Ask for clarification if uncertain
-9. Test incrementally (one change at a time)
-10. Keep Variant Y as the source of truth
-11. **Maintain database schema compatibility**
-12. **Use Syracuse credentials everywhere**
-13. **Read this file before ANY action**
+1. **Run SACRED VERIFICATION before making any changes** (establishes environment baseline)
+2. **Run SACRED VERIFICATION after making changes** (validates environment integrity)
+3. **Align all variant test procedures with SACRED VERIFICATION format** (enables performance comparison)
+4. Test Variant Y before and after changes
+5. Run complete functionality benchmark (all 4 steps matching SACRED)
+6. Document IP allocations
+7. Use dedicated infrastructure per variant
+8. Follow standard IP allocation pattern
+9. Record benchmark results in SACRED-compatible CSV format
+10. Revert immediately if SACRED VERIFICATION fails (environment is broken)
+11. Ask for clarification if uncertain
+12. Test incrementally (one change at a time)
+13. Keep Variant Y as the source of truth and environment health indicator
+14. **Ensure raw data format matches SACRED VERIFICATION schema** (mandatory for comparisons)
+15. **Understand SACRED VERIFICATION tests the ENTIRE REPOSITORY ENVIRONMENT**
+16. **Maintain database schema compatibility**
+17. **Use Syracuse credentials everywhere**
+18. **Read this file before ANY action**
 
 ---
 

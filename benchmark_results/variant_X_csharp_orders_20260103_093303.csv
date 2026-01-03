@@ -1,0 +1,7 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+2026-01-03T14:33:18Z,variant_x,csharp,/api/v1/orders,order,4,10,10,4034.96,2.53,1.91,2.47,11.99,118.24,6.45,41102,0,0,0,0,0,0,0,23.38,2.3380,1,N/A,INITIAL
+2026-01-03T14:33:30Z,variant_x,csharp,/api/v1/orders,order,6,20,10,6093.12,2.97,2.95,3.68,5.61,17.69,.83,61044,0,0,0,0,0,0,0,35.31,3.5310,2,51.00,SIGNIFICANT_GROWTH
+2026-01-03T14:33:42Z,variant_x,csharp,/api/v1/orders,order,9,40,10,7873.50,4.67,3.94,8.03,13.02,26.62,2.44,78881,0,0,0,0,0,0,0,45.63,4.5630,3,29.00,SIGNIFICANT_GROWTH
+2026-01-03T14:33:54Z,variant_x,csharp,/api/v1/orders,order,13,80,10,7213.26,11.58,8.38,23.02,0,75.48,8.57,72845,0,0,0,0,0,0,0,41.80,4.1800,4,-8.00,MARGINAL_GROWTH
+2026-01-03T14:34:06Z,variant_x,csharp,/api/v1/orders,order,14,96,10,6991.70,12.84,8.17,26.41,44.09,84.37,10.22,70526,0,0,0,0,0,0,0,40.52,4.0520,5,-3.00,MARGINAL_GROWTH
+2026-01-03T14:34:19Z,variant_x,csharp,/api/v1/orders,order,15,115,10,7078.04,16.74,9.12,34.97,66.37,176.38,15.59,71584,0,0,0,0,0,0,0,41.02,4.1020,6,1.00,PLATEAU_CONFIRMED

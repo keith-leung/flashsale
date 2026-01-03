@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.AbstractMap;
 import java.util.stream.Collectors;
@@ -27,7 +26,6 @@ public class OrderService {
     private final PaymentRepository paymentRepository;
     private final SkuRepository skuRepository;
     private final InventoryRepository inventoryRepository;
-    private final FlashSaleRepository flashSaleRepository;
     private final SnowflakeIdGenerator idGenerator;
     private final RedisCacheService redisCache;
 
@@ -38,7 +36,6 @@ public class OrderService {
             PaymentRepository paymentRepository,
             SkuRepository skuRepository,
             InventoryRepository inventoryRepository,
-            FlashSaleRepository flashSaleRepository,
             SnowflakeIdGenerator idGenerator,
             RedisCacheService redisCache) {
         this.orderRepository = orderRepository;
@@ -46,7 +43,6 @@ public class OrderService {
         this.paymentRepository = paymentRepository;
         this.skuRepository = skuRepository;
         this.inventoryRepository = inventoryRepository;
-        this.flashSaleRepository = flashSaleRepository;
         this.idGenerator = idGenerator;
         this.redisCache = redisCache;
     }
@@ -113,7 +109,7 @@ public class OrderService {
         order.setShippingAmount(createDto.getShippingAmount());
         order.setCurrency(createDto.getCurrency());
         order.setNotes(createDto.getNotes());
-        order.setFlashSaleCampaignId(createDto.getFlashSaleCampaignId());
+        order.setFlashSaleId(createDto.getFlashSaleId());
 
         order = orderRepository.save(order); // Get the order ID
 
@@ -135,27 +131,8 @@ public class OrderService {
                 inventoryRepository.save(sku.getInventory());
             }
 
-            // Check for active flash sale campaign and apply flash price
-            FlashSale activeCampaign = null;
-            if (sku.getSpuId() != null) {
-                LocalDateTime now = LocalDateTime.now();
-                List<FlashSale> campaigns = flashSaleRepository.findAll();
-                activeCampaign = campaigns.stream()
-                    .filter(c -> c.getSpuId().equals(sku.getSpuId()))
-                    .filter(c -> c.getIsActive())
-                    .filter(c -> "active".equals(c.getStatus()))
-                    .filter(c -> !c.getStartTime().isAfter(now) && !c.getEndTime().isBefore(now))
-                    .findFirst()
-                    .orElse(null);
-            }
-
-            // Create line item - use flash price if campaign is active
-            BigDecimal unitPrice;
-            if (activeCampaign != null) {
-                unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : activeCampaign.getFlashPrice();
-            } else {
-                unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : sku.getPrice();
-            }
+            // Create line item
+            BigDecimal unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : sku.getPrice();
             BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(itemDto.getQuantity()));
 
             OrderLineItem lineItem = new OrderLineItem();
@@ -241,7 +218,7 @@ public class OrderService {
             response.setOrderNumber(orderNumber);
             response.setCustomerEmail(createDto.getCustomerEmail());
             response.setCustomerName(createDto.getCustomerName());
-            response.setFlashSaleCampaignId(flashSaleId);
+            response.setFlashSaleId(flashSaleId);
             response.setStatus(OrderStatus.pending);
 
             return response;
@@ -333,7 +310,7 @@ public class OrderService {
         dto.setCurrency(order.getCurrency());
         dto.setStatus(order.getStatus());
         dto.setNotes(order.getNotes());
-        dto.setFlashSaleCampaignId(order.getFlashSaleCampaignId());
+        dto.setFlashSaleId(order.getFlashSaleId());
         dto.setCreatedAt(order.getCreatedAt());
         dto.setUpdatedAt(order.getUpdatedAt());
 

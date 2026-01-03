@@ -67,14 +67,14 @@ public class Order extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    // Flash sale reference (optional)
-    @Column(columnDefinition = "CHAR(36)")
-    private UUID flashSaleId;
+    // Flash sale campaign reference (optional) - SACRED schema compliant
+    @Column(name = "flash_sale_campaign_id", columnDefinition = "CHAR(36)")
+    private UUID flashSaleCampaignId;
 
     // Navigation properties
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "flashSaleId", insertable = false, updatable = false)
-    private FlashSaleEvent flashSale;
+    @JoinColumn(name = "flash_sale_campaign_id", insertable = false, updatable = false)
+    private FlashSale flashSaleCampaign;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderLineItem> lineItems = new ArrayList<>();
@@ -171,20 +171,20 @@ public class Order extends BaseEntity {
         this.notes = notes;
     }
 
-    public UUID getFlashSaleId() {
-        return flashSaleId;
+    public UUID getFlashSaleCampaignId() {
+        return flashSaleCampaignId;
     }
 
-    public void setFlashSaleId(UUID flashSaleId) {
-        this.flashSaleId = flashSaleId;
+    public void setFlashSaleCampaignId(UUID flashSaleCampaignId) {
+        this.flashSaleCampaignId = flashSaleCampaignId;
     }
 
-    public FlashSaleEvent getFlashSale() {
-        return flashSale;
+    public FlashSale getFlashSaleCampaign() {
+        return flashSaleCampaign;
     }
 
-    public void setFlashSale(FlashSaleEvent flashSale) {
-        this.flashSale = flashSale;
+    public void setFlashSaleCampaign(FlashSale flashSaleCampaign) {
+        this.flashSaleCampaign = flashSaleCampaign;
     }
 
     public List<OrderLineItem> getLineItems() {

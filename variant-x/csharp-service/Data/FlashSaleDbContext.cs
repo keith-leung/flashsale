@@ -13,6 +13,7 @@ public class FlashSaleDbContext : DbContext
     public DbSet<Sku> Skus { get; set; }
     public DbSet<Inventory> Inventories { get; set; }
     public DbSet<FlashSaleEvent> FlashSaleEvents { get; set; }
+    public DbSet<Models.FlashSale> FlashSaleCampaigns { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderLineItem> OrderLineItems { get; set; }
     public DbSet<Payment> Payments { get; set; }
@@ -68,16 +69,35 @@ public class FlashSaleDbContext : DbContext
             entity.HasIndex(e => e.EndTime);
             entity.HasIndex(e => e.Status);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            
+
             entity.HasOne(e => e.Sku)
                   .WithMany(e => e.FlashSales)
                   .HasForeignKey(e => e.SkuId)
                   .OnDelete(DeleteBehavior.Cascade);
-                  
+
             entity.Property(e => e.Status)
                   .HasConversion<string>();
         });
-        
+
+        // FlashSale (SPU-level campaigns) configuration
+        modelBuilder.Entity<Models.FlashSale>(entity =>
+        {
+            entity.ToTable("flash_sale_campaigns");
+            entity.HasIndex(e => e.Name);
+            entity.HasIndex(e => e.SpuId);
+            entity.HasIndex(e => e.StartTime);
+            entity.HasIndex(e => e.EndTime);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.IsActive);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.Spu)
+                  .WithMany()
+                  .HasForeignKey(e => e.SpuId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
         // Order configuration
         modelBuilder.Entity<Order>(entity =>
         {
@@ -86,10 +106,10 @@ public class FlashSaleDbContext : DbContext
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            
-            entity.HasOne(e => e.FlashSale)
+
+            entity.HasOne(e => e.FlashSaleCampaign)
                   .WithMany(e => e.Orders)
-                  .HasForeignKey(e => e.FlashSaleId)
+                  .HasForeignKey(e => e.FlashSaleCampaignId)
                   .OnDelete(DeleteBehavior.SetNull);
                   
             entity.Property(e => e.Status)

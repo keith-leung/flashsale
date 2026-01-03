@@ -94,20 +94,7 @@ public class FlashSalesController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Purchase items from a flash sale
-    /// </summary>
-    [HttpPost("{id}/purchase")]
-    public async Task<ActionResult<PurchaseResponseDto>> Purchase(Guid id, PurchaseRequestDto dto)
-    {
-        try
-        {
-            var result = await _flashSaleService.PurchaseAsync(id, dto);
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-    }
+    // NOTE: Flash sale purchases MUST go through /api/v1/orders endpoint (Policy 6)
+    // Backend intelligently detects if SKU is in active flash sale
+    // DO NOT create separate purchase endpoints here - violates SACRED conventions
 }

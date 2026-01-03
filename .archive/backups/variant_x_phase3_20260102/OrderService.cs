@@ -27,7 +27,7 @@ public class OrderService : IOrderService
     {
         var query = _context.Orders
             .Include(o => o.LineItems)
-            .Include(o => o.FlashSaleCampaign)
+            .Include(o => o.FlashSale)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(customerEmail))
@@ -48,7 +48,7 @@ public class OrderService : IOrderService
     {
         var order = await _context.Orders
             .Include(o => o.LineItems)
-            .Include(o => o.FlashSaleCampaign)
+            .Include(o => o.FlashSale)
             .FirstOrDefaultAsync(o => o.Id == id);
 
         return order == null ? null : _mapper.Map<OrderResponseDto>(order);
@@ -116,7 +116,7 @@ public class OrderService : IOrderService
                 ShippingAmount = dto.ShippingAmount,
                 Currency = dto.Currency,
                 Notes = dto.Notes,
-                FlashSaleCampaignId = dto.FlashSaleCampaignId
+                FlashSaleId = dto.FlashSaleId
             };
 
             _context.Orders.Add(order);
@@ -149,24 +149,8 @@ public class OrderService : IOrderService
                     sku.Inventory.ReserveQuantity(itemDto.Quantity);
                 }
 
-                // Check for active flash sale campaign and apply flash price
-                Models.FlashSale? activeCampaign = null;
-                if (sku.SpuId != null)
-                {
-                    var now = DateTime.UtcNow;
-                    activeCampaign = await _context.FlashSaleCampaigns
-                        .FirstOrDefaultAsync(c =>
-                            c.SpuId == sku.SpuId &&
-                            c.IsActive &&
-                            c.Status == "active" &&
-                            c.StartTime <= now &&
-                            c.EndTime >= now);
-                }
-
-                // Create line item - use flash price if campaign is active
-                var unitPrice = activeCampaign != null
-                    ? (itemDto.UnitPrice ?? activeCampaign.FlashPrice)
-                    : (itemDto.UnitPrice ?? sku.Price);
+                // Create line item
+                var unitPrice = itemDto.UnitPrice ?? sku.Price;
                 var totalPrice = unitPrice * itemDto.Quantity;
 
                 var lineItem = new OrderLineItem
@@ -279,7 +263,7 @@ public class OrderService : IOrderService
                 OrderNumber = orderNumber,
                 CustomerEmail = dto.CustomerEmail,
                 CustomerName = dto.CustomerName,
-                FlashSaleCampaignId = flashSaleId,
+                FlashSaleId = flashSaleId,
                 Status = OrderStatus.Pending
             };
         }

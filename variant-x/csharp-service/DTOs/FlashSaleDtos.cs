@@ -79,15 +79,31 @@ public class FlashSaleEventResponseDto
     public DateTime UpdatedAt { get; set; }
 }
 
+// =============================================================================
+// DEPRECATED - DO NOT USE (Violates Policy 6)
+// =============================================================================
+// Flash sale purchases MUST go through /api/v1/orders endpoint
+// Backend intelligently detects if SKU is in active flash sale
+// These DTOs are kept to avoid breaking imports but should NOT be used
+// =============================================================================
+
+/// <summary>
+/// DEPRECATED: Use /api/v1/orders endpoint instead (Policy 6)
+/// </summary>
+[Obsolete("Use /api/v1/orders endpoint instead (Policy 6)")]
 public class PurchaseRequestDto
 {
     [Required]
     [Range(1, int.MaxValue)]
     public int Quantity { get; set; }
-    
+
     public string? CustomerId { get; set; }
 }
 
+/// <summary>
+/// DEPRECATED: Use /api/v1/orders endpoint instead (Policy 6)
+/// </summary>
+[Obsolete("Use /api/v1/orders endpoint instead (Policy 6)")]
 public class PurchaseResponseDto
 {
     public bool Success { get; set; }

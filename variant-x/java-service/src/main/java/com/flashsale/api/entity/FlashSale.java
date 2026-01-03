@@ -14,18 +14,24 @@ import java.util.UUID;
  * Flash Sale Campaign (SPU-level) with total sale limit across all SKU variants
  */
 @Entity
-@Table(name = "flash_sales", indexes = {
+@Table(name = "flash_sale_campaigns", indexes = {
+    @Index(name = "idx_flash_sale_name", columnList = "name"),
     @Index(name = "idx_flash_sale_spu", columnList = "spu_id"),
     @Index(name = "idx_flash_sale_status", columnList = "status"),
     @Index(name = "idx_flash_sale_start", columnList = "start_time"),
-    @Index(name = "idx_flash_sale_end", columnList = "end_time")
+    @Index(name = "idx_flash_sale_end", columnList = "end_time"),
+    @Index(name = "idx_flash_sale_active", columnList = "is_active"),
+    @Index(name = "idx_flash_sale_created", columnList = "created_at")
 })
 public class FlashSale extends BaseEntity {
 
     @NotBlank
-    @Size(max = 255)
-    @Column(name = "campaign_name", nullable = false)
-    private String campaignName;
+    @Size(max = 250)
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
 
     @NotNull
     @Column(name = "spu_id", nullable = false, columnDefinition = "CHAR(36)")
@@ -36,8 +42,16 @@ public class FlashSale extends BaseEntity {
     @Column(name = "total_sale_limit", nullable = false)
     private Integer totalSaleLimit;
 
-    @Column(name = "sold_count", nullable = false)
-    private Integer soldCount = 0;
+    @Column(name = "sold_quantity", nullable = false)
+    private Integer soldQuantity = 0;
+
+    @Min(1)
+    @Column(name = "max_quantity_per_customer", nullable = false)
+    private Integer maxQuantityPerCustomer = 1;
+
+    @NotNull
+    @Column(name = "flash_price", precision = 10, scale = 2, nullable = false)
+    private BigDecimal flashPrice;
 
     @NotNull
     @Column(name = "start_time", nullable = false)
@@ -47,16 +61,12 @@ public class FlashSale extends BaseEntity {
     @Column(name = "end_time", nullable = false)
     private LocalDateTime endTime;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private FlashSaleCampaignStatus status = FlashSaleCampaignStatus.pending;
+    @Size(max = 20)
+    @Column(name = "status", nullable = false, length = 20)
+    private String status = "scheduled";
 
-    @Column(name = "flash_sale_price", precision = 10, scale = 2)
-    private BigDecimal flashSalePrice;
-
-    @Min(1)
-    @Column(name = "max_per_order", nullable = false)
-    private Integer maxPerOrder = 10;
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "spu_id", insertable = false, updatable = false)
@@ -65,18 +75,19 @@ public class FlashSale extends BaseEntity {
     // Constructors
     public FlashSale() {}
 
-    public FlashSale(String campaignName, UUID spuId, Integer totalSaleLimit,
-                     LocalDateTime startTime, LocalDateTime endTime) {
-        this.campaignName = campaignName;
+    public FlashSale(String name, UUID spuId, Integer totalSaleLimit,
+                     BigDecimal flashPrice, LocalDateTime startTime, LocalDateTime endTime) {
+        this.name = name;
         this.spuId = spuId;
         this.totalSaleLimit = totalSaleLimit;
+        this.flashPrice = flashPrice;
         this.startTime = startTime;
         this.endTime = endTime;
     }
 
     // Business logic methods
     public Integer getRemainingQuantity() {
-        return Math.max(0, totalSaleLimit - soldCount);
+        return Math.max(0, totalSaleLimit - soldQuantity);
     }
 
     public boolean isTimeActive() {
@@ -85,21 +96,29 @@ public class FlashSale extends BaseEntity {
     }
 
     public boolean isAvailable() {
-        return status == FlashSaleCampaignStatus.active && isTimeActive() && getRemainingQuantity() > 0;
+        return isActive && "active".equals(status) && isTimeActive() && getRemainingQuantity() > 0;
     }
 
     public Double getPercentageSold() {
         if (totalSaleLimit == 0) return 0.0;
-        return (soldCount * 100.0) / totalSaleLimit;
+        return (soldQuantity * 100.0) / totalSaleLimit;
     }
 
     // Getters and Setters
-    public String getCampaignName() {
-        return campaignName;
+    public String getName() {
+        return name;
     }
 
-    public void setCampaignName(String campaignName) {
-        this.campaignName = campaignName;
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public UUID getSpuId() {
@@ -118,12 +137,28 @@ public class FlashSale extends BaseEntity {
         this.totalSaleLimit = totalSaleLimit;
     }
 
-    public Integer getSoldCount() {
-        return soldCount;
+    public Integer getSoldQuantity() {
+        return soldQuantity;
     }
 
-    public void setSoldCount(Integer soldCount) {
-        this.soldCount = soldCount;
+    public void setSoldQuantity(Integer soldQuantity) {
+        this.soldQuantity = soldQuantity;
+    }
+
+    public Integer getMaxQuantityPerCustomer() {
+        return maxQuantityPerCustomer;
+    }
+
+    public void setMaxQuantityPerCustomer(Integer maxQuantityPerCustomer) {
+        this.maxQuantityPerCustomer = maxQuantityPerCustomer;
+    }
+
+    public BigDecimal getFlashPrice() {
+        return flashPrice;
+    }
+
+    public void setFlashPrice(BigDecimal flashPrice) {
+        this.flashPrice = flashPrice;
     }
 
     public LocalDateTime getStartTime() {
@@ -142,28 +177,20 @@ public class FlashSale extends BaseEntity {
         this.endTime = endTime;
     }
 
-    public FlashSaleCampaignStatus getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    public void setStatus(FlashSaleCampaignStatus status) {
+    public void setStatus(String status) {
         this.status = status;
     }
 
-    public BigDecimal getFlashSalePrice() {
-        return flashSalePrice;
+    public Boolean getIsActive() {
+        return isActive;
     }
 
-    public void setFlashSalePrice(BigDecimal flashSalePrice) {
-        this.flashSalePrice = flashSalePrice;
-    }
-
-    public Integer getMaxPerOrder() {
-        return maxPerOrder;
-    }
-
-    public void setMaxPerOrder(Integer maxPerOrder) {
-        this.maxPerOrder = maxPerOrder;
+    public void setIsActive(Boolean isActive) {
+        this.isActive = isActive;
     }
 
     public Spu getSpu() {
@@ -176,6 +203,6 @@ public class FlashSale extends BaseEntity {
 
     @Override
     public String toString() {
-        return campaignName + " (" + status + ")";
+        return name + " (" + status + ")";
     }
 }

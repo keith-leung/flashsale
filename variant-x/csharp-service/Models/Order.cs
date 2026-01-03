@@ -61,14 +61,15 @@ public class Order : BaseEntity
     
     // Status and metadata
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
-    
+
     public string? Notes { get; set; }
-    
-    // Flash sale reference (optional)
-    public Guid? FlashSaleId { get; set; }
-    
+
+    // Flash sale campaign reference (optional) - SACRED schema compliant
+    [Column("flash_sale_campaign_id")]
+    public Guid? FlashSaleCampaignId { get; set; }
+
     // Navigation properties
-    public FlashSaleEvent? FlashSale { get; set; }
+    public FlashSale? FlashSaleCampaign { get; set; }
     public ICollection<OrderLineItem> LineItems { get; set; } = new List<OrderLineItem>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

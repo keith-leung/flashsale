@@ -59,9 +59,6 @@ public class Sku extends BaseEntity {
     @OneToOne(mappedBy = "sku", cascade = CascadeType.ALL, orphanRemoval = true)
     private Inventory inventory;
 
-    @OneToMany(mappedBy = "sku", cascade = CascadeType.ALL)
-    private List<FlashSaleEvent> flashSales = new ArrayList<>();
-
     // Constructors
     public Sku() {}
 
@@ -150,14 +147,6 @@ public class Sku extends BaseEntity {
 
     public void setInventory(Inventory inventory) {
         this.inventory = inventory;
-    }
-
-    public List<FlashSaleEvent> getFlashSales() {
-        return flashSales;
-    }
-
-    public void setFlashSales(List<FlashSaleEvent> flashSales) {
-        this.flashSales = flashSales;
     }
 
     @Override

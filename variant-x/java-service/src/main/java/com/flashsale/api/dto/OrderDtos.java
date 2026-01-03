@@ -152,7 +152,7 @@ public class OrderDtos {
 
         private String notes;
 
-        private UUID flashSaleId;
+        private UUID flashSaleCampaignId;
 
         @NotEmpty
         @Valid
@@ -210,12 +210,12 @@ public class OrderDtos {
             this.notes = notes;
         }
 
-        public UUID getFlashSaleId() {
-            return flashSaleId;
+        public UUID getFlashSaleCampaignId() {
+            return flashSaleCampaignId;
         }
 
-        public void setFlashSaleId(UUID flashSaleId) {
-            this.flashSaleId = flashSaleId;
+        public void setFlashSaleCampaignId(UUID flashSaleCampaignId) {
+            this.flashSaleCampaignId = flashSaleCampaignId;
         }
 
         public List<OrderLineItemCreateDto> getLineItems() {
@@ -273,7 +273,7 @@ public class OrderDtos {
         private String currency;
         private OrderStatus status;
         private String notes;
-        private UUID flashSaleId;
+        private UUID flashSaleCampaignId;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private List<OrderLineItemResponseDto> lineItems;
@@ -370,12 +370,12 @@ public class OrderDtos {
             this.notes = notes;
         }
 
-        public UUID getFlashSaleId() {
-            return flashSaleId;
+        public UUID getFlashSaleCampaignId() {
+            return flashSaleCampaignId;
         }
 
-        public void setFlashSaleId(UUID flashSaleId) {
-            this.flashSaleId = flashSaleId;
+        public void setFlashSaleCampaignId(UUID flashSaleCampaignId) {
+            this.flashSaleCampaignId = flashSaleCampaignId;
         }
 
         public LocalDateTime getCreatedAt() {

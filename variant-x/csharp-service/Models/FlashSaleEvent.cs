@@ -37,7 +37,8 @@ public class FlashSaleEvent : BaseEntity
     // Navigation properties
     [ForeignKey(nameof(SkuId))]
     public virtual Sku Sku { get; set; } = null!;
-    public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
+    // NOTE: FlashSaleEvents are SKU-level, Orders link to FlashSaleCampaigns (SPU-level)
+    // Removed Orders navigation property to prevent EF Core from creating flash_sale_event_id foreign key
     
     // Calculated properties
     [NotMapped]

@@ -55,16 +55,16 @@ class Order(Base):
     # Status and metadata
     status = Column(SQLEnum(OrderStatus), default=OrderStatus.pending, nullable=False, index=True)
     notes = Column(Text, nullable=True)
-    
-    # Flash sale reference (optional)
-    flash_sale_id = Column(CHAR(36), ForeignKey("flash_sale_events.id"), nullable=True, index=True)
-    
+
+    # Flash sale campaign reference (optional) - SACRED schema compliant
+    flash_sale_campaign_id = Column(CHAR(36), ForeignKey("flash_sale_campaigns.id"), nullable=True, index=True)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
-    flash_sale = relationship("FlashSaleEvent", back_populates="orders")
+    flash_sale_campaign = relationship("FlashSaleCampaign", back_populates="orders")
     line_items = relationship("OrderLineItem", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan")
     

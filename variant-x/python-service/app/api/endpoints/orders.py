@@ -167,7 +167,7 @@ async def _create_order_variant_y(
         total_amount=0,
         currency=order_data.currency,
         notes=order_data.notes,
-        flash_sale_id=order_data.flash_sale_id
+        flash_sale_campaign_id=order_data.flash_sale_campaign_id
     )
     db.add(order)
     await db.flush()  # Flush to get the order ID
