@@ -1,10 +1,11 @@
 
+import asyncio
 import logging
 import os
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -77,7 +78,11 @@ async def get_order(order_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=ResponseDTO[OrderResponse], status_code=status.HTTP_201_CREATED)
-async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_db)):
+async def create_order(
+    order_data: OrderCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Create a new order with intelligent routing:
     - If SKU is in active flash sale campaign → Use Variant X (Redis atomic counters)
@@ -115,7 +120,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession = Depends(get_d
             # VARIANT X: Redis Atomic Counters (Flash Sale Path)
             # ============================================================
             return await _create_order_variant_x(
-                order_data, order_number, flash_sale_id, sku_metadata, db
+                order_data, order_number, flash_sale_id, sku_metadata, background_tasks, db
             )
         else:
             # ============================================================
@@ -241,6 +246,7 @@ async def _create_order_variant_x(
     order_number: str,
     flash_sale_id: str,
     sku_metadata: dict,
+    background_tasks: BackgroundTasks,
     db: AsyncSession
 ) -> ResponseDTO[OrderResponse]:
     """
@@ -253,12 +259,20 @@ async def _create_order_variant_x(
     total_quantity = sum(item.quantity for item in order_data.line_items)
     campaign_remaining = await redis_cache.reserve_campaign_inventory(flash_sale_id, total_quantity)
 
+    # Check if sold out
     if campaign_remaining < 0:
         logger.warning(f"Campaign {flash_sale_id} sold out, remaining: {campaign_remaining}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Flash sale campaign sold out"
         )
+
+    # Check if campaign just sold out (trigger write-back)
+    if campaign_remaining == 0:
+        logger.info(f"Campaign {flash_sale_id} just sold out, triggering write-back")
+        # Import here to avoid circular dependency
+        from app.services.campaign_writeback import writeback_campaign
+        background_tasks.add_task(writeback_campaign, flash_sale_id, db, "sold_out")
 
     # Step 2: Reserve each SKU inventory
     reserved_skus = []

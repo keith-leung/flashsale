@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.endpoints import spus, skus, inventory, orders
+from app.api.endpoints import spus, skus, inventory, orders, campaign_admin
 
 api_router = APIRouter()
 
@@ -11,3 +11,4 @@ api_router.include_router(spus.router, prefix="/spus", tags=["SPUs"])
 api_router.include_router(skus.router, prefix="/skus", tags=["SKUs"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["Inventory"])
 api_router.include_router(orders.router, prefix="/orders", tags=["Orders"])
+api_router.include_router(campaign_admin.router, prefix="/admin", tags=["Campaign Admin"])

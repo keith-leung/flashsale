@@ -1,5 +1,6 @@
 """Main FastAPI application."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 import time
@@ -15,15 +16,45 @@ from app.core.logging import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# Global task holder
+background_task = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    global background_task
+
     # Startup
     logger.info("Starting Flash Sale Service", extra={"service": "flash-sale-python"})
+
+    # Connect to Redis
+    from app.core.redis_cache import redis_cache
+    await redis_cache.connect()
+    logger.info("Redis connection established")
+
+    # Start campaign monitor background task
+    from app.tasks.campaign_monitor import campaign_monitor_task
+    background_task = asyncio.create_task(campaign_monitor_task())
+    logger.info("Campaign monitor background task started")
+
     yield
+
     # Shutdown
     logger.info("Shutting down Flash Sale Service", extra={"service": "flash-sale-python"})
+
+    # Close Redis connection
+    await redis_cache.close()
+
+    # Cancel background task
+    if background_task:
+        background_task.cancel()
+        try:
+            await background_task
+        except asyncio.CancelledError:
+            logger.info("Campaign monitor task cancelled")
+
+    logger.info("Shutdown complete")
 
 
 app = FastAPI(
