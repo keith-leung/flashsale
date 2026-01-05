@@ -1,0 +1,6 @@
+variant,service,endpoint,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p99_latency_ms,total_requests,errors,mode_notes
+variant_a,python,/api/v1/orders,10,10,4444.50,2.33,,,44488,,Redis_decremented_by_44000
+variant_a,python,/api/v1/orders,25,10,4365.04,6.48,,,44356,,Redis_decremented_by_44500
+variant_a,python,/api/v1/orders,50,10,4179.13,11.68,,,41839,,Redis_decremented_by_42000
+variant_a,python,/api/v1/orders,100,10,4048.88,23.71,,,40816,,Redis_decremented_by_40500
+variant_a,python,/api/v1/orders,150,10,3755.07,39.00,,,38355,,Redis_decremented_by_39000
