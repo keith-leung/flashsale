@@ -295,11 +295,12 @@ Content-Type: application/json
 | X       | /health | Nginx   | c=100       | 49.77ms   | 12,811 req/s    |
 | A       | /health | Python  | c=500       | -         | 19,602 req/s    |
 | A       | /health | Java    | c=300       | -         | 179,740 req/s   |
+| A       | /health | C#      | c=300       | 19.62ms   | 292,930 req/s   |
 | A       | /health | Nginx   | c=100       | 7.54ms    | 12,600 req/s    |
 | **FLASH SALE ORDERS** |
 | Y       | /orders | Python  | c=300       | 213.04ms  | 1,390 req/s ✓   |
 | Y       | /orders | Java    | c=200       | 21.90ms   | 8,718 req/s ✓   |
-| Y       | /orders | C#      | c=300       | 26.57ms   | **11,240 req/s** 👑 |
+| Y       | /orders | C#      | c=300       | 26.57ms   | 11,240 req/s ✓  |
 | Y       | /orders | Nginx   | c=300       | 90.71ms   | 3,401 req/s     |
 | X       | /orders | Python  | c=20        | 11.94ms   | 1,528 req/s     |
 | X       | /orders | Java    | c=20        | 3.73ms    | 4,819 req/s     |
@@ -307,6 +308,7 @@ Content-Type: application/json
 | X       | /orders | Nginx   | c=200       | 238.75ms  | 1,387 req/s     |
 | A       | /orders | Python  | c=100       | 13.31ms   | 3,093 req/s     |
 | A       | /orders | Java    | c=100       | 2.41ms    | 10,653 req/s    |
+| A       | /orders | C#      | c=150       | 3.66ms    | **39,586 req/s** 👑 |
 | A       | /orders | Nginx   | c=100       | 99.97ms   | 1,512 req/s     |
 
 **⚠️ Note on Previous Results:** Earlier tests used conservative concurrency levels (c=68 for Python Y, c=96 for Java Y, c=48 for C# Y), significantly understating performance. Updated tests with proper concurrency (c=300, c=200, c=300) revealed:

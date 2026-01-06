@@ -59,6 +59,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 // Background Services
 builder.Services.AddHostedService<FlashSaleStatusUpdateService>();
+builder.Services.AddHostedService<OrderWritebackService>();
 
 // CORS
 builder.Services.AddCors(options =>
