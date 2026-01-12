@@ -198,6 +198,17 @@ SPU: "iPhone 15 Pro"
 - **MariaDB:** Relational database for products, SKUs, orders
 - **Redis:** Used by Variants X and A for caching/concurrency (Optional for new variants)
 
+### Performance Strategy: Efficiency First, Then Scale
+
+**The Philosophy:**
+1.  **Single-Service Efficiency:** Your primary goal is to optimize the *efficiency* of a single service instance.
+    *   **The Ceiling:** Your order processing throughput cannot exceed your `/health` endpoint throughput (theoretical framework limit).
+    *   **The Goal:** Minimize the gap between `/orders` and `/health`. If `/health` is 20k req/s, achieving 12k req/s for orders is excellent efficiency (60%).
+2.  **Horizontal Scalability:** The 100,000 req/s target is an **Aggregate Goal**.
+    *   It is acceptable if a single instance "only" handles 15,000 req/s, provided it scales linearly.
+    *   Deploying 7-8 such instances behind Nginx to hit 100k req/s is a valid and successful architecture.
+    *   **However:** Variants like C# Variant A have proven that getting close to 100k on a *single* instance is possible!
+
 ---
 
 ## 2. API Design
@@ -581,6 +592,21 @@ This repository supports multiple architectural variants for performance compari
    - Implement `GET /api/v1/campaigns/{id}/status`
    - Return: "Not Started", "Active", "Sold Out", "Ended"
 
+#### Benchmark Scope vs. Production Reality
+
+**You are building a Formula 1 engine, not a family sedan.**
+Because this is a performance benchmark, you may make certain operational simplifications that would not be acceptable in production.
+
+**✅ Permitted Simplifications:**
+- **Manual Operations:** You can assume a human operator manually creates campaigns via SQL or runs a script to reconcile inventory after the sale. You do not need admin UIs or automated cron jobs.
+- **"Happy Path" Focus:** You do not need complex automated failover or refund logic. If the system crashes during a benchmark, the test is simply voided.
+- **Pre-Computation:** You may pre-calculate data (e.g., warm up caches) before the benchmark starts.
+
+**❌ Forbidden Shortcuts:**
+- **Skipping Validation:** You MUST check inventory and campaign limits for *every* request. Overselling is an immediate disqualification.
+- **Hardcoded Responses:** You cannot return static JSON. You must actually create the order record in memory/DB/Redis.
+- **Data Loss:** You cannot simply drop valid orders. If you accept an order (HTTP 201), it must be retrievable (in DB or a persistent queue).
+
 **What You CAN Optimize (Your Innovation):**
 
 - ✅ **HOW** you check campaign pool (Redis direct, RAM cache, pre-allocation, etc.)
@@ -653,6 +679,39 @@ If implementing Variant B (next):
 1. Read `versions/CONVENTIONS.md` completely
 2. Understand that Variant Y defines the database schema (immutable)
 3. Schema Source: `migrations/001_add_flash_sale_campaigns.sql`
+
+#### Step 6: Implement in All Three Languages
+
+**CRITICAL: Must implement Python, Java, AND C#**
+
+Why all three?
+- Performance comparison across language runtimes
+- Validates architecture is language-independent
+- Proves concepts work in different concurrency models
+
+**Example Directory Structure:**
+```
+/home/syracuse/flashsale/variant-{your_letter}/
+├── docker-compose.yml
+├── python-service/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── src/
+│       └── main.py  # FastAPI implementation
+├── java-service/
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src/main/java/com/flashsale/api/
+│       ├── controller/OrderController.java
+│       └── service/YourInventoryService.java
+├── csharp-service/
+│   ├── Dockerfile
+│   ├── FlashSale.csproj
+│   └── Controllers/
+│       └── OrderController.cs
+└── nginx/
+    └── nginx.conf
+```
 
 #### Step 7: Create Verification Script
 

@@ -527,6 +527,23 @@ Backend logic:
 - ❌ Require frontend to detect flash sales
 - ❌ Break backward compatibility of `/api/v1/orders`
 
+### Policy 8: Clean Room Protocol - Intellectual Property Protection
+
+**To ensure fair benchmarking, new variants must be implemented in a "Clean Room" environment.**
+
+**The Constraint:**
+New variants (e.g., B, C, D) are designed to test **original** architectural ideas. Reading the implementation code of existing optimized variants (X and A) contaminates the experiment by leaking their specific optimizations (Atomic Redis DECR, Batching, Partitioning).
+
+**The Declaration:**
+Every new variant's `README.md` MUST contain the following "Clean Room Declaration":
+
+> "I certify that this architecture was designed based solely on the Business Requirements and the Variant Y Baseline. I have not read, copied, or reverse-engineered the implementation code of Variant X or Variant A."
+
+**Enforcement:**
+- Directories `/variant-x/` and `/variant-a/` contain "Poison Files" (`⚠️_RESTRICTED_ACCESS_VIOLATION.md`).
+- Accessing these files triggers an automatic protocol violation for AI agents.
+- Agents found accessing these directories will have their variant disqualified.
+
 ---
 
 ## Network Allocation Policy
