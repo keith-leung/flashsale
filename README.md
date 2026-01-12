@@ -50,8 +50,8 @@ If you cannot answer these questions, **STOP** and read CONVENTIONS.md now.
 
 ✅ This README.md file (root directory)
 ✅ `versions/CONVENTIONS.md` (schema and API contracts)
-✅ Variant Y services: `python-service/`, `java-service/`, `csharp-service/`
-✅ Database schema files
+✅ Variant Y services (Root-Level): `python-service/`, `java-service/`, `csharp-service/`
+✅ Database schema files (e.g., `migrations/001_add_flash_sale_campaigns.sql`)
 ✅ Performance numbers (no implementation details)
 
 **WHY THIS RESTRICTION EXISTS:**
@@ -78,12 +78,12 @@ It is the UNIT TEST for the ENTIRE REPOSITORY ENVIRONMENT.
 **The Mandatory Workflow:**
 ```bash
 # 1. Before making ANY changes to ANY variant
-bash SACRED_VERIFICATION.sh  # Establishes environment baseline
+bash scripts/verification/SACRED_VERIFICATION.sh  # Establishes environment baseline
 
 # 2. Make your changes to Variant X (ports, Docker, resources, code)
 
 # 3. After changes - Test environmental integrity
-bash SACRED_VERIFICATION.sh  # CRITICAL TEST
+bash scripts/verification/SACRED_VERIFICATION.sh  # CRITICAL TEST
     ↓
     FAILS? → Your changes BROKE THE ENVIRONMENT
             → Revert and fix infrastructure approach
@@ -92,7 +92,7 @@ bash SACRED_VERIFICATION.sh  # CRITICAL TEST
              → Safe to verify variant-specific functionality
 
 # 4. Now test variant-specific functionality
-bash verify_variant_x.sh
+bash variant-x/verify_variant_x.sh
 ```
 
 **Why This Methodology:**
@@ -119,16 +119,14 @@ bash verify_variant_x.sh
 ## Table of Contents
 1. [Business Requirements & System Logic](#1-business-requirements--system-logic)
 2. [API Design](#2-api-design)
-3. [Complete Performance Comparison - All Variants](#3-complete-performance-comparison---all-variants)
-4. [Sacred Conventions & Idempotence](#4-sacred-conventions--idempotence)
-5. [Quick Start (5 Minutes)](#5-quick-start-5-minutes)
-6. [Repository Structure & Navigation](#6-repository-structure--navigation)
-7. [Running Benchmarks](#7-running-benchmarks-step-by-step)
-8. [Recording & Comparing Results](#8-recording--comparing-results)
-9. [Understanding Test Strategies](#9-understanding-test-strategies)
-10. [File Index](#10-file-index--where-to-find-things)
-11. [Implementing Your Own Variant](#11-implementing-your-own-variant---guide-for-newcomer-models)
-12. [Version History & Notes](#12-version-history--notes)
+3. [The Baseline (Variant Y)](#3-the-baseline-variant-y)
+4. [Complete Performance Comparison](#4-complete-performance-comparison---all-variants)
+5. [Sacred Conventions & Idempotence](#5-sacred-conventions--idempotence)
+6. [Quick Start (5 Minutes)](#6-quick-start-5-minutes)
+7. [Repository Structure & Navigation](#7-repository-structure--navigation)
+8. [Running Benchmarks](#8-running-benchmarks-step-by-step)
+9. [Implementing Your Own Variant](#9-implementing-your-own-variant---guide-for-newcomer-models)
+10. [Version History & Notes](#10-version-history--notes)
 
 ---
 
@@ -198,7 +196,7 @@ SPU: "iPhone 15 Pro"
 - **C# (ASP.NET Core):** High-performance async, superior database handling
 - **Nginx:** HTTPS load balancer, round-robin distribution across backends
 - **MariaDB:** Relational database for products, SKUs, orders
-- **Redis:** (Removed in Variant Y) - No longer used
+- **Redis:** Used by Variants X and A for caching/concurrency (Optional for new variants)
 
 ---
 
@@ -274,7 +272,32 @@ Content-Type: application/json
 
 ---
 
-## 3. Complete Performance Comparison - All Variants
+## 3. The Baseline (Variant Y)
+
+**Definition:**
+Variant Y is the "Sacred Baseline". It represents the standard, robust, database-transaction-based implementation. It prioritizes correctness over raw speed.
+
+**Location:**
+Variant Y services reside in the **Root Directories**:
+- Python: `/home/syracuse/flashsale/python-service/`
+- Java: `/home/syracuse/flashsale/java-service/`
+- C#: `/home/syracuse/flashsale/csharp-service/`
+
+**Schema Source of Truth:**
+The database schema defined by Variant Y is the immutable standard for all variants.
+- **Authoritative SQL:** `migrations/001_add_flash_sale_campaigns.sql`
+
+**Implementation Details (Variant Y Only):**
+- **Inventory Check:** `SELECT ... FOR UPDATE` (Pessimistic Locking) in MariaDB.
+- **Limit Check:** Transactional update of `flash_sale_campaigns.sold_quantity`.
+- **Redis:** **NOT USED** for inventory tracking (pure DB logic).
+
+**Your Innovation:**
+Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Variant Y, but you **MUST NOT** rely solely on slow DB transactions. You are expected to introduce caching, queuing, or other mechanisms (Redis, Memcached, etc.) to beat Variant Y's performance.
+
+---
+
+## 4. Complete Performance Comparison - All Variants
 
 **Test Strategy:** Mixed (Fixed sweep + Adaptive plateau detection)
 **Latest Test:** 2026-01-05
@@ -311,11 +334,6 @@ Content-Type: application/json
 | A       | /orders | C#      | c=400       | 4.24ms    | **93,876 req/s** 👑 |
 | A       | /orders | Nginx   | c=100       | 11.09ms   | 9,049 req/s     |
 
-**⚠️ Note on Previous Results:** Earlier tests used conservative concurrency levels (c=68 for Python Y, c=96 for Java Y, c=48 for C# Y), significantly understating performance. Updated tests with proper concurrency (c=300, c=200, c=300) revealed:
-- Python Y: 711→1,390 req/s (+95%)
-- Java Y: 4,139→8,718 req/s (+110%)
-- C# Y: 9,221→11,240 req/s (+22%)
-
 ### Performance Rankings
 
 **Flash Sale Orders (Production Workload):**
@@ -332,88 +350,12 @@ Content-Type: application/json
 11. Python Variant Y - 1,390 req/s @ c=300
 12. Nginx Variant X - 1,387 req/s @ c=200
 
-### Key Findings
-
-**1. C# Variant A Achieves Record Throughput**
-- **93,876 req/s** @ c=400 - Nearly meets 100K goal on single service
-- Latency: 4.24ms average
-- Demonstrates Variant A architecture's effectiveness with .NET
-
-**2. Variant A Dominates All Rankings**
-- C# A: 93,876 req/s (8.4x faster than C# Y)
-- Java A: 14,950 req/s (1.7x faster than Java Y)
-- Python A: 12,140 req/s (8.7x faster than Python Y)
-
-**3. Java Variant A Achieves Best Latency**
-- 14,950 req/s @ c=50
-- Latency: 3.43ms (lowest among all variants)
-
-**4. Concurrency Tuning is Critical**
-- Under-testing hides true performance
-- Each service has different optimal concurrency
-- C# A peaks at c=400, Java A peaks at c=50
-
-**5. Architecture vs Language Performance**
-- **Best throughput:** C# A - 93,876 req/s @ c=400
-- **Best latency:** Java A - 3.43ms @ c=50
-- **Most scalable:** Nginx A enables horizontal scaling (9,049 req/s RR)
-
-**6. Performance Goal Status**
-- **Performance Goal:** 100,000 req/s (single service)
-- **Best Single Service:** 93,876 req/s (C# A) - **94% of goal achieved!**
-- **Gap Remaining:** Only 6.5% improvement needed
-- **Horizontal Scaling Path:** 9,049 req/s (Nginx RR) × 12 backends = 108,588 req/s ✓
-
 ---
 
-## 4. Sacred Conventions & Idempotence
+## 5. Sacred Conventions & Idempotence
 
 ### ⚠️ CRITICAL: Understanding SACRED
 
-**SACRED is the golden standard defined by Variant Y. ALL variants must align with SACRED.**
-
-- ✅ **Variant Y:** Defines the SACRED schema (golden standard, immutable)
-- ✅ **Variant X:** Must align with SACRED schema (same database schema, same API contracts)
-- ✅ **All other variants:** Must align with SACRED schema (implementation can vary, schema cannot)
-
-### 🔥 SACRED VERIFICATION = Repository-Wide Unit Test
-
-**SACRED VERIFICATION is the unit test for the ENTIRE REPOSITORY, not just Variant Y.**
-
-**Critical Understanding:**
-- Tests variant Y (simplest, most stable implementation)
-- **Validates the entire environment** (database, network, ports, Docker, resources)
-- If SACRED VERIFICATION fails → **the environment approach is wrong**
-
-**Why This Matters:**
-```
-Make changes to Variant X (new ports, Docker config, resources)
-    ↓
-Run SACRED VERIFICATION
-    ↓
-    FAILS? → Variant X changes broke the environment
-            → Fix environment configuration before proceeding
-    ↓
-    PASSES? → Environment is healthy
-             → Safe to verify Variant X specifically
-```
-
-**SACRED VERIFICATION tests environmental integrity:**
-- ✅ Port conflicts and network configuration
-- ✅ Database connectivity across all services
-- ✅ Docker container orchestration
-- ✅ Resource allocation (CPU, memory)
-- ✅ Service dependencies and startup order
-
-**The Workflow:**
-1. Make changes to ANY variant (X, Z, etc.)
-2. Run SACRED VERIFICATION **first** (validates environment)
-3. If SACRED passes → Run variant-specific verification
-4. If SACRED fails → Environment is broken, fix infrastructure
-
-**Variant Y is the canary in the coal mine** - if the simplest implementation can't run, the environment is misconfigured.
-
-### What is SACRED?
 **SACRED** = Self-verifying, Automated, Consistent, Reproducible, Explicit, Deterministic
 
 **SACRED defines the schema standard.** All variants must use the same schema as Variant Y.
@@ -490,7 +432,7 @@ grep ",order," benchmark_results/variant_X_raw_*.csv | awk -F',' '{print $3, $9}
 
 ---
 
-## 5. Quick Start (5 Minutes)
+## 6. Quick Start (5 Minutes)
 
 ### Prerequisites
 - Docker Desktop installed
@@ -520,7 +462,7 @@ cat /tmp/my_first_test.csv
 
 ---
 
-## 6. Repository Structure & Navigation
+## 7. Repository Structure & Navigation
 
 ### Key Directories
 
@@ -539,12 +481,13 @@ cat /tmp/my_first_test.csv
 ```
 /home/syracuse/flashsale/
 ├── README.md                       # This file
-├── docker-compose.yml              # Service definitions
+├── docker-compose.yml              # Service definitions (Variant Y)
 │
-├── docs/                           # Documentation
-│   ├── QUICK_START.md
-│   ├── ADAPTIVE_TESTING.md
-│   └── architecture/
+├── python-service/                 # Variant Y Python Implementation
+├── java-service/                   # Variant Y Java Implementation
+├── csharp-service/                 # Variant Y C# Implementation
+├── nginx/                          # Nginx Config
+├── migrations/                     # Database Schema SQLs
 │
 ├── scripts/                        # Operational scripts
 │   ├── verification/               # SACRED_VERIFICATION.sh, etc.
@@ -560,18 +503,9 @@ cat /tmp/my_first_test.csv
 │   ├── plateau_detector.sh
 │   └── fixed_sweep.sh
 │
-├── benchmark_results/              # Test results
-│   └── campaigns/
-│       └── 20260102_fixed_sweep/  # Latest results
-│
 ├── versions/                       # Version history
 │   ├── CONVENTIONS.md              # Sacred policies
 │   └── [dated version files]
-│
-├── python-service/                 # Service implementations
-├── java-service/
-├── csharp-service/
-└── nginx/
 ```
 
 ### Quick File Index
@@ -584,7 +518,7 @@ cat /tmp/my_first_test.csv
 
 ---
 
-## 7. Running Benchmarks (Step-by-Step)
+## 8. Running Benchmarks (Step-by-Step)
 
 ### Strategy 1: Fixed Concurrency Sweep
 **Use when:** You want to test specific concurrency levels (e.g., c=10, 25, 50, 100)
@@ -612,158 +546,13 @@ run_adaptive_test "variant_y" "java" "8081" "/health" "health" 10 \
   "benchmark_results/campaigns/$(date +%Y%m%d)_adaptive/raw/java_health.csv"
 ```
 
-### Campaign Organization Template
-```bash
-# Create new campaign directory
-CAMPAIGN_DIR="benchmark_results/campaigns/$(date +%Y%m%d)_my_campaign"
-mkdir -p "$CAMPAIGN_DIR"/{raw,reports,visualizations}
-
-# Run tests (save to raw/)
-# Generate reports (save to reports/)
-# Create charts (save to visualizations/)
-```
-
 ---
 
-## 8. Recording & Comparing Results
-
-### After Running Tests
-
-1. **Organize raw data:**
-   ```bash
-   mv /tmp/*.csv benchmark_results/campaigns/[campaign]/raw/
-   ```
-
-2. **Generate summary report:**
-   ```bash
-   bash tools/generate_summary_reports.sh \
-     benchmark_results/campaigns/[campaign]/raw/full_data.csv \
-     > benchmark_results/campaigns/[campaign]/reports/summary.md
-   ```
-
-3. **Create campaign README** (copy template):
-   ```markdown
-   # Campaign: My Test Campaign
-   Date: 2026-01-02
-   Variant: Y
-   
-   ## Objective
-   [Why this test was run]
-   
-   ## Results Summary
-   - Python: X req/s (health), Y req/s (orders)
-   - Java: X req/s (health), Y req/s (orders)
-   - C#: X req/s (health), Y req/s (orders)
-   
-   ## Key Findings
-   [What did we learn?]
-   ```
-
-### Comparing Across Campaigns
-
-```bash
-# Extract peak performance from all campaigns
-awk -F',' 'NR>1 && $5=="health" {print $3, $9}' \
-  benchmark_results/campaigns/*/raw/*.csv | sort -k2 -n
-
-# Compare specific concurrency level
-grep ",50," benchmark_results/campaigns/*/raw/csharp_health.csv
-```
-
----
-
-## 9. Understanding Test Strategies
-
-### Fixed Sweep Strategy
-
-**Concurrency Levels:**
-- Health endpoints: c=10, 25, 50, 100, 200, 400, 800 (10s duration)
-- Order endpoints: c=10, 25, 50, 100, 150, 200, 300 (15s duration)
-- Nginx: c=10, 25, 50, 100, 200 (10s/15s duration)
-
-**Threads:** Adaptive (min(12, concurrency))
-
-**When to use:** Consistent comparison across runs, specific load testing
-
-### Adaptive Plateau Strategy
-
-**Algorithm:**
-- Start: t=4, c=10
-- >5% growth → increase aggressively (t×1.5, c×2)
-- 2-5% growth → increase moderately (t×1.2, c×1.5)
-- <2% growth → plateau candidate (t×1.1, c×1.2)
-- <2% variance across 3 tests → PLATEAU CONFIRMED
-
-**When to use:** Finding optimal configuration, unknown system limits
-
----
-
-## 10. File Index & Where to Find Things
-
-### Documentation
-- System overview → This README.md
-- Quick start guide → `docs/QUICK_START.md`
-- Testing methodology → `docs/ADAPTIVE_TESTING.md`
-- Sacred conventions → `versions/CONVENTIONS.md`
-- Architecture details → `docs/architecture/IMPLEMENTATION_SUMMARY.md`
-
-### Scripts & Tools
-- Verification → `scripts/verification/SACRED_VERIFICATION.sh`
-- Benchmarking → `scripts/benchmarking/run_4step_benchmark.sh`
-- Analysis → `tools/generate_summary_reports.sh`
-- Libraries → `lib/fixed_sweep.sh`, `lib/plateau_detector.sh`
-
-### Results & Comparisons
-- Latest results → `benchmark_results/campaigns/[latest]/`
-- Historical results → `benchmark_results/campaigns/archive/`
-- Full result data → See campaign `raw/` directories
-
-### Advanced Topics
-
-**CSV Output Schema:**
-```csv
-timestamp,variant,service,endpoint,test_type,threads,concurrency,
-duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,
-p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,
-total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,
-socket_errors_read,socket_errors_write,socket_errors_timeout,
-transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
-```
-
----
-
-## Quick Reference Card
-
-| Task | Command |
-|------|---------|
-| Start services | `docker compose up -d` |
-| Verify services | `bash scripts/verification/SACRED_VERIFICATION.sh` |
-| Fixed sweep test | `source lib/fixed_sweep.sh && run_fixed_sweep ...` |
-| Adaptive test | `source lib/plateau_detector.sh && run_adaptive_test ...` |
-| Generate report | `bash tools/generate_summary_reports.sh input.csv > output.md` |
-| Compare results | `grep "pattern" benchmark_results/campaigns/*/raw/*.csv` |
-
----
-
-## For More Information
-
-- Architecture details → `docs/architecture/IMPLEMENTATION_SUMMARY.md`
-- Testing methodology → `docs/ADAPTIVE_TESTING.md`
-- Deployment guide → `versions/DEPLOYMENT.md`
-- Version history → `versions/20260102_adaptive_plateau_detection.md`
-
----
-
-## 11. Implementing Your Own Variant - Guide for Newcomer Models
+## 9. Implementing Your Own Variant - Guide for Newcomer Models
 
 ### Overview
 
 This repository supports multiple architectural variants for performance comparison. Each variant implements the same API contracts but uses different internal strategies for inventory management.
-
-**Existing Variants:**
-- **Variant Y (SACRED Baseline):** Reference implementation, defines schema
-- **Variant X (Experimental):** Performance: 1,528 req/s (Python), 4,819 req/s (Java), 7,873 req/s (C#)
-- **Variant A (Production):** Performance: 12,140 req/s (Python), 14,950 req/s (Java), 93,876 req/s (C#)
 
 ### How to Implement a New Variant
 
@@ -771,19 +560,16 @@ This repository supports multiple architectural variants for performance compari
 
 **Flash Sale Campaign Business Logic - MANDATORY:**
 
-These are the core business rules ALL variants MUST implement. You cannot optimize away these requirements:
-
 1. **Campaign Pool Limit Enforcement (MUST)**
    - Each campaign has `total_sale_limit` (e.g., 1,000 items across ALL SKUs)
    - MUST decrement atomically when order succeeds
    - MUST reject orders when pool reaches 0
-   - Key: `fs:{campaign_id}:limit` in Redis
+   - **Note:** Variant Y does this via DB Transactions. You may use Redis, Memcached, or other means.
 
 2. **SKU Stock Validation (MUST)**
    - Each SKU has persistent inventory in database
    - MUST check stock > 0 before creating order
    - MUST decrement stock atomically
-   - Database table: `inventory.quantity`
 
 3. **Order Record Creation (MUST)**
    - Create `orders` record with status='created'
@@ -794,11 +580,8 @@ These are the core business rules ALL variants MUST implement. You cannot optimi
 4. **Campaign Status API (MUST)**
    - Implement `GET /api/v1/campaigns/{id}/status`
    - Return: "Not Started", "Active", "Sold Out", "Ended"
-   - Calculate `remaining` from Redis pool
 
 **What You CAN Optimize (Your Innovation):**
-
-These are WHERE you implement your architectural creativity:
 
 - ✅ **HOW** you check campaign pool (Redis direct, RAM cache, pre-allocation, etc.)
 - ✅ **WHEN** you decrement counters (eager, lazy, batch)
@@ -806,39 +589,17 @@ These are WHERE you implement your architectural creativity:
 - ✅ **Concurrency strategy** (locks, CAS, optimistic, pessimistic)
 - ✅ **Refill strategy** (sync, async, predictive, reactive)
 
-**What You DON'T Need to Implement (Optional):**
-
-- ❌ Complete order lifecycle (payment processing, shipping, etc.)
-- ❌ Audit logging for compliance (add if you want, not required)
-- ❌ Failover handling (focus on performance, not HA)
-- ❌ Monitoring/observability (nice-to-have)
-- ❌ Order cancellation/refunds
-- ❌ Complex business rules (discounts, coupons, etc.)
-
 **Reference Implementation:**
 
-- **ONLY look at Variant Y** for schema and business logic: Main service directories `python-service/`, `java-service/`, `csharp-service/`
+- **Variant Y (Baseline):** You MAY copy the root `python-service`, `java-service`, and `csharp-service` folders to your `variant-{letter}/` directory as a starting scaffold.
 - **STRICTLY FORBIDDEN to read:**
   - ❌ `/variant-x/` directory and all subdirectories
   - ❌ `/variant-a/` directory and all subdirectories
   - ❌ Any other `/variant-*/` directories
-  - ❌ Implementation details, architecture docs, or code from other variants
-- **You may ONLY read:**
-  - ✅ Root README.md (this file)
-  - ✅ `versions/CONVENTIONS.md` (schema definitions)
-  - ✅ Variant Y services: `python-service/`, `java-service/`, `csharp-service/`
-  - ✅ Database schema files
-  - ✅ Performance comparison tables (numbers only, no implementation details)
-
-**Why This Restriction:**
-- Each variant represents original research and innovation
-- Copying defeats the purpose of performance comparison
-- Your variant must demonstrate YOUR architectural thinking
-- Performance improvements must come from YOUR innovations, not copying others
 
 #### Step 1: Check Resource Allocation (AVOID CONFLICTS)
 
-**CRITICAL: All existing variant resource allocations are listed below. Your new variant MUST use different ports, networks, and container names.**
+**CRITICAL:** Your new variant MUST use different ports, networks, and container names.
 
 ### Existing Variant Resource Allocation Table
 
@@ -891,141 +652,22 @@ If implementing Variant B (next):
 **Before implementing ANY variant, you MUST:**
 1. Read `versions/CONVENTIONS.md` completely
 2. Understand that Variant Y defines the database schema (immutable)
-3. All new variants MUST align with SACRED schema
-4. Run SACRED VERIFICATION before and after your changes
-
-**SACRED Schema Includes:**
-- Database tables: `spus`, `skus`, `inventory`, `orders`, `order_line_items`, `payments`, `flash_sale_campaigns`, `flash_sale_campaign_skus`
-- Redis keys: `fs:{campaign_id}:limit` for campaign pool tracking
-- API contracts: `POST /api/v1/orders`, `GET /api/v1/campaigns/{id}/status`
-
-#### Step 3: Choose Your Variant Letter
-
-Pick an unused letter: **B, C, D, E, ..., Z**
-- Variant Y = SACRED baseline (immutable)
-- Variant X = Experimental (deprecated)
-- Variant A = Corrected producer-consumer
-- Your variant = Next available letter
-
-#### Step 4: Create Isolated Infrastructure
-
-**Network Isolation (CRITICAL):**
-```yaml
-# variant-{your_letter}/docker-compose.yml
-networks:
-  flash-network-{your_letter}:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.{90+N}.0.0/24  # N = your variant number
-```
-
-**Port Allocation (No Conflicts):**
-```yaml
-services:
-  flash-python-{your_letter}:
-    ports:
-      - "300{XX}:8000"  # XX = unique port offset
-  flash-java-{your_letter}:
-    ports:
-      - "80{YY}:8080"   # YY = unique port offset
-  flash-csharp-{your_letter}:
-    ports:
-      - "300{ZZ}:80"    # ZZ = unique port offset
-  flash-mariadb-{your_letter}:
-    ports:
-      - "33{NN}:3306"   # NN = unique port (e.g., 3314, 3315)
-  flash-nginx-{your_letter}:
-    ports:
-      - "84{MM}:443"    # MM = unique port (e.g., 8447, 8448)
-```
-
-**Container Naming:**
-```yaml
-container_name: flash-{service}-{your_letter}
-# Examples: flash-python-b, flash-java-b, flash-mariadb-b
-```
-
-#### Step 5: Implement Your Architecture
-
-**Required Components (Per Service):**
-
-1. **Order Service** (implements `/api/v1/orders`)
-   - Must validate SKU exists and has stock
-   - Must check campaign limits if SKU is in active campaign
-   - Must create order, line items, payment records
-   - Must return proper HTTP status codes (201/400/409/503)
-
-2. **Campaign Service** (implements `/api/v1/campaigns/{id}/status`)
-   - Must return real-time campaign status
-   - Statuses: "Not Started", "Active", "Sold Out", "Ended"
-
-3. **Health Endpoint** (`/health`)
-   - Must return HTTP 200 with empty or minimal response
-   - Used for infrastructure baseline testing
-
-**Your Architectural Innovation:**
-
-You can ONLY study Variant Y's implementation to understand the baseline approach. All other variants' implementations are strictly off-limits.
-
-**Example Innovations to Explore (Do Your Own Research):**
-- Caching strategies at different layers
-- Concurrency control mechanisms
-- Inventory allocation techniques
-- Async processing patterns
-- Distributed system coordination approaches
-- Database optimization strategies
-- Memory management approaches
-
-**IMPORTANT:** These are general categories only. DO NOT read other variant directories to see HOW they implemented these concepts. Your solution must be based on YOUR research and architectural thinking, not copied from existing variants.
-
-#### Step 6: Implement in All Three Languages
-
-**CRITICAL: Must implement Python, Java, AND C#**
-
-Why all three?
-- Performance comparison across language runtimes
-- Validates architecture is language-independent
-- Proves concepts work in different concurrency models
-
-**Example Directory Structure:**
-```
-/home/syracuse/flashsale/variant-{your_letter}/
-├── docker-compose.yml
-├── python-service/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── src/
-│       └── main.py  # FastAPI implementation
-├── java-service/
-│   ├── Dockerfile
-│   ├── pom.xml
-│   └── src/main/java/com/flashsale/api/
-│       ├── controller/OrderController.java
-│       └── service/YourInventoryService.java
-├── csharp-service/
-│   ├── Dockerfile
-│   ├── FlashSale.csproj
-│   └── Controllers/
-│       └── OrderController.cs
-└── nginx/
-    └── nginx.conf
-```
+3. Schema Source: `migrations/001_add_flash_sale_campaigns.sql`
 
 #### Step 7: Create Verification Script
 
 **Required:** `variant-{your_letter}/verify_variant_{your_letter}.sh`
 
-Must follow SACRED VERIFICATION format:
+**Use the provided template:**
 ```bash
-#!/bin/bash
-# 1. Start services
-# 2. Health checks
-# 3. Test order creation
-# 4. Run benchmarks (same methodology as SACRED)
-# 5. Generate CSV output (SACRED schema)
-# 6. Return exit code (0 = success, non-zero = failure)
+cp scripts/verification/template_verify_variant.sh variant-{your_letter}/verify_variant_{your_letter}.sh
+chmod +x variant-{your_letter}/verify_variant_{your_letter}.sh
 ```
+
+**Customize the template:**
+1. Open the script
+2. Update the `CONFIGURATION` section (Container names, ports)
+3. **Data Setup:** Use `python-service/setup_test_data.py` (from Variant Y) as your reference for seeding data.
 
 **CSV Output Schema (MUST MATCH SACRED):**
 ```csv
@@ -1037,18 +679,16 @@ socket_errors_read,socket_errors_write,socket_errors_timeout,
 transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
 ```
 
-#### Step 8: The SACRED VERIFICATION Workflow
+#### Step 4: The SACRED VERIFICATION Workflow
 
 **MANDATORY Workflow (Never Skip):**
 
 ```bash
 # 1. BEFORE making ANY changes
-cd /home/syracuse/flashsale
 bash scripts/verification/SACRED_VERIFICATION.sh
 # MUST PASS - establishes environmental baseline
 
 # 2. Create your variant infrastructure
-mkdir variant-{your_letter}
 # ... implement services, docker-compose, etc.
 
 # 3. Start your variant services
@@ -1056,108 +696,16 @@ cd variant-{your_letter}
 docker-compose up -d
 
 # 4. CRITICAL: Run SACRED VERIFICATION again
-cd /home/syracuse/flashsale
-bash scripts/verification/SACRED_VERIFICATION.sh
+bash ../scripts/verification/SACRED_VERIFICATION.sh
 # MUST STILL PASS - proves no environmental interference
 
-# 5. If SACRED VERIFICATION fails:
-#    → Your variant broke the environment (ports, network, resources)
-#    → Fix your variant's infrastructure
-#    → DO NOT proceed until SACRED passes
-
-# 6. Once SACRED passes, verify your variant
-cd variant-{your_letter}
+# 5. Once SACRED passes, verify your variant
 bash verify_variant_{your_letter}.sh
-
-# 7. Benchmark your variant
-source ../lib/fixed_sweep.sh
-run_fixed_sweep "variant_{your_letter}" "python" "{port}" "/api/v1/orders" \
-  "order" "benchmark_results/variant_{your_letter}_orders.csv"
 ```
-
-#### Step 9: Compare Performance
-
-**Add your results to the comparison table:**
-
-```bash
-# Extract peak performance
-grep ",order," benchmark_results/variant_{your_letter}_*.csv | \
-  awk -F',' '{print $3, $9}' | sort -k2 -n | tail -1
-
-# Compare to baseline
-echo "Variant Y (C#): 11,240 req/s"
-echo "Your Variant:   ??? req/s"
-```
-
-#### Step 10: Document Your Variant
-
-**Required Documentation:**
-
-1. **Implementation Summary** (`variant-{your_letter}/README.md`)
-   ```markdown
-   # Variant {Your_Letter}: {Your Architecture Name}
-
-   ## Architecture Overview
-   [Explain your approach]
-
-   ## Key Innovations
-   - Innovation 1: ...
-   - Innovation 2: ...
-
-   ## Performance Results
-   - Python: X req/s
-   - Java: Y req/s
-   - C#: Z req/s
-
-   ## Comparison to Baselines
-   - vs Variant Y: +X%
-   - vs Variant A: +Y%
-   ```
-
-2. **Update Main README** (this file)
-   - Add row to performance comparison table
-   - Update rankings if your variant wins
-
-3. **Version Note** (create `versions/20260105_variant_{your_letter}.md`)
-   - Document design decisions
-   - Explain trade-offs
-   - Record benchmark methodology
-
-### Common Pitfalls to Avoid
-
-**❌ DON'T:**
-- Modify Variant Y schema (breaks SACRED principle)
-- Reuse ports from other variants (causes conflicts)
-- Skip SACRED VERIFICATION before/after (misses environmental issues)
-- Use different API endpoints (breaks compatibility)
-- Implement only one language (incomplete comparison)
-- Use different test methodology (incomparable results)
-
-**✅ DO:**
-- Follow SACRED schema exactly (same tables, same contracts)
-- Isolate infrastructure (unique network, ports, containers)
-- Run SACRED VERIFICATION first (establishes baseline)
-- Implement all three languages (complete comparison)
-- Use identical test methodology (comparable results)
-- Document design decisions (future models benefit)
-
-### Success Criteria
-
-Your variant implementation is complete when:
-- ✅ SACRED VERIFICATION passes before and after your changes
-- ✅ All three services (Python, Java, C#) implement the API
-- ✅ Benchmarks run using SACRED methodology
-- ✅ CSV output matches SACRED schema
-- ✅ Performance results added to main comparison table
-- ✅ Documentation written (README + version note)
-- ✅ No port conflicts or resource interference
-- ✅ Can run alongside Variant Y without issues
-
-**Welcome to the performance optimization challenge! May your variant be the fastest! 🚀**
 
 ---
 
-## 12. Version History & Notes
+## 10. Version History & Notes
 
 ### Version 2026-01-12: Variant A Record Performance
 
@@ -1172,69 +720,6 @@ Your variant implementation is complete when:
 1. C# Variant A - 93,876 req/s @ c=400 (NEW RECORD)
 2. Java Variant A - 14,950 req/s @ c=50
 3. Python Variant A - 12,140 req/s @ c=150
-
----
-
-### Version 2026-01-05: Comprehensive Performance Analysis
-
-**What Changed:**
-- Added complete Nginx round-robin benchmarks for all variants
-- Corrected Variant Y concurrency levels (revealed 2x underestimation)
-- Comprehensive cross-variant performance table (22 data points)
-- Implementation guide for newcomer models
-
-**Key Discoveries:**
-- **C# Variant Y wins overall:** 11,240 req/s @ c=300 (previously 9,221 @ c=48)
-- **Java Variant A best latency:** 2.41ms vs C# Y's 26.57ms
-- **Concurrency tuning critical:** Under-testing can underestimate by 110%
-- **Business logic is bottleneck:** Not Redis (17x gap between /health and /orders)
-
-**Performance Rankings Updated:**
-1. C# Variant Y - 11,240 req/s @ c=300
-2. Java Variant A - 10,653 req/s @ c=100
-3. Java Variant Y - 8,718 req/s @ c=200
-
-**Methodology Improvements:**
-- Pre-load 50M items to eliminate refill interference
-- Test multiple concurrency levels to find true peak
-- Include Nginx results for cluster scalability assessment
-
-**Files Added:**
-- `/tmp/test_variant_y_high_concurrency.sh` - Proper concurrency testing
-- `/tmp/test_nginx_all_variants.sh` - Nginx benchmark suite
-- Implementation guide in main README.md
-
-### Version 2026-01-04: Java Variant A Implementation
-
-**What Changed:**
-- Implemented Java Variant A
-- Fixed 3 critical bugs (YAML escaping, MariaDB auth, database config)
-- Achieved 10,653 req/s (3.74x faster than Python A)
-- Implementation details in `/variant-a/` directory
-
-**Bugs Fixed:**
-1. YAML password escaping (`!` requires quotes)
-2. MariaDB wildcard users (created IP-specific users)
-3. Database configuration decimal error
-
-**Files Created:**
-- 6 new Java files (840+ lines)
-- 4 benchmark scripts
-- 4 analysis reports
-
-### Version 2026-01-03: Python Variant A Implementation
-
-**What Changed:**
-- Implemented Python Variant A
-- Achieved 3,093 req/s (3.24x faster than Python Y)
-- Implementation details in `/variant-a/` directory
-
-### Version 2026-01-02: SACRED Methodology & Variant Y Baseline
-
-**What Changed:**
-- Established SACRED verification as repository-wide unit test
-- Documented conventions in `versions/CONVENTIONS.md`
-- Baseline performance: C# Y 1,642 req/s (later corrected to 11,240)
 
 ---
 
