@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,4 +32,7 @@ public interface SkuRepository extends JpaRepository<Sku, UUID> {
 
     @Query("SELECT s FROM Sku s LEFT JOIN FETCH s.inventory")
     Page<Sku> findAllWithInventory(Pageable pageable);
+
+    @Query("SELECT s FROM Sku s WHERE s.spuId = :spuId AND s.isActive = :isActive")
+    List<Sku> findBySpuIdAndIsActive(@Param("spuId") UUID spuId, @Param("isActive") Boolean isActive);
 }

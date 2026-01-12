@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Global task holder
 background_task = None
 
+# Global campaign allocator (FIXED dual-layer implementation)
+_campaign_allocator = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,20 +36,95 @@ async def lifespan(app: FastAPI):
     await redis_cache.connect()
     logger.info("Redis connection established")
 
-    # Initialize Adaptive Inventory (Variant A Corrected)
+    # Initialize FIXED Campaign Allocator (Dual-Layer Tracking)
+    global _campaign_allocator
     from app.core.database import AsyncSessionLocal
-    from app.startup_allocations import initialize_adaptive_inventory
+    from app.services.campaign_memory_allocator import CampaignMemoryAllocator
 
     try:
+        _campaign_allocator = CampaignMemoryAllocator(
+            redis_client=redis_cache.client,
+            service_name="python"
+        )
+
         async with AsyncSessionLocal() as db:
-            await initialize_adaptive_inventory(
-                db=db,
-                redis_client=redis_cache.client,
-                campaign_id="750e8400-e29b-41d4-a716-446655440000"
+            # Load active campaigns into allocator
+            from sqlalchemy import select
+            from app.models.flash_sale_campaign import FlashSaleCampaign
+            from app.models.sku import SKU
+
+            result = await db.execute(
+                select(FlashSaleCampaign)
+                .where(FlashSaleCampaign.status == 'active')
+                .where(FlashSaleCampaign.is_active == True)
             )
+
+            campaigns = result.scalars().all()
+
+            for campaign in campaigns:
+                # Get SKUs for this campaign's SPU
+                sku_result = await db.execute(
+                    select(SKU)
+                    .where(SKU.spu_id == campaign.spu_id)
+                    .where(SKU.is_active == True)
+                )
+                skus = sku_result.scalars().all()
+
+                if not skus:
+                    continue
+
+                # Calculate allocations (simple even split for now)
+                preallocate_pct = float(campaign.preallocate_percentage or 60.0)
+                python_ratio = campaign.python_allocation_ratio or 1
+                total_ratio = (campaign.csharp_allocation_ratio or 20) + \
+                             (campaign.java_allocation_ratio or 13) + python_ratio
+
+                service_allocation = int(
+                    campaign.total_sale_limit * preallocate_pct / 100 *
+                    python_ratio / total_ratio
+                )
+
+                # Allocate evenly across SKUs
+                sku_allocations = {}
+                items_per_sku = service_allocation // len(skus)
+
+                for sku in skus:
+                    sku_allocations[str(sku.id)] = items_per_sku
+
+                # Load into allocator
+                await _campaign_allocator.load_campaign(
+                    campaign_id=str(campaign.id),
+                    spu_id=str(campaign.spu_id),
+                    sku_allocations=sku_allocations,
+                    flash_price=float(campaign.flash_price),
+                    ordinary_price=float(skus[0].price) if skus else 99.99,
+                    refill_watermark_pct=float(campaign.refill_lower_watermark_pct or 25.0)
+                )
+
+                logger.info(
+                    f"Loaded campaign {campaign.name}: "
+                    f"{service_allocation} items allocated to Python service"
+                )
+
+        logger.info("FIXED Campaign Allocator initialized successfully")
+
     except Exception as e:
-        logger.error(f"Failed to initialize adaptive inventory: {e}", exc_info=True)
-        logger.warning("Service will fall back to Redis campaign pool for all requests")
+        logger.error(f"Failed to initialize FIXED campaign allocator: {e}", exc_info=True)
+        logger.warning("Service will fall back to old adaptive inventory")
+
+        # Fallback: Try old adaptive inventory
+        try:
+            from app.startup_allocations import initialize_adaptive_inventory
+
+            async with AsyncSessionLocal() as db:
+                await initialize_adaptive_inventory(
+                    db=db,
+                    redis_client=redis_cache.client,
+                    campaign_id="750e8400-e29b-41d4-a716-446655440000"
+                )
+        except Exception as e2:
+            logger.error(f"Failed to initialize old adaptive inventory: {e2}", exc_info=True)
+            logger.warning("Service will fall back to Redis campaign pool for all requests")
 
     # Start campaign monitor background task
     from app.tasks.campaign_monitor import campaign_monitor_task
@@ -258,3 +336,24 @@ async def health_check():
     """
     from starlette.responses import PlainTextResponse
     return PlainTextResponse("200 OK", status_code=200)
+
+
+def get_campaign_allocator():
+    """
+    Get global campaign allocator instance (FIXED dual-layer implementation)
+
+    Returns:
+        CampaignMemoryAllocator instance
+
+    Raises:
+        RuntimeError: If allocator not initialized
+    """
+    global _campaign_allocator
+
+    if _campaign_allocator is None:
+        raise RuntimeError(
+            "Campaign allocator not initialized. "
+            "Service startup may have failed."
+        )
+
+    return _campaign_allocator

@@ -26,4 +26,10 @@ public interface FlashSaleRepository extends JpaRepository<FlashSale, UUID> {
 
     @Query("SELECT fs FROM FlashSale fs LEFT JOIN FETCH fs.spu WHERE fs.id = :id")
     Optional<FlashSale> findByIdWithSpu(@Param("id") UUID id);
+
+    @Query(value = "SELECT * FROM flash_sale_campaigns WHERE status = :status AND is_active = 1 " +
+                   "AND CHAR_LENGTH(id) = 36 AND id REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' " +
+                   "AND CHAR_LENGTH(spu_id) = 36 AND spu_id REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
+           nativeQuery = true)
+    List<FlashSale> findActiveWithValidUUIDs(@Param("status") String status);
 }

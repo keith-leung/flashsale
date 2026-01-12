@@ -60,7 +60,7 @@ public class AdaptiveInventoryService {
         this.skuId = skuId;
         this.redisTemplate = redisTemplate;
         this.luaScript = luaScript;
-        this.inventoryKey = String.format("fs:%s:sku:%s:limit", campaignId, skuId);
+        this.inventoryKey = String.format("fs:%s:redis_pool:sku:%s", campaignId, skuId);
     }
 
     /**

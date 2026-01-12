@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -32,6 +33,7 @@ public class OrderService {
     private final RedisCacheService redisCache;
     private final AdaptiveInventoryManager adaptiveInventory;
     private final AllocationManagerV2 allocationManagerV2;
+    private final CampaignMemoryAllocator campaignAllocator;
 
     @Autowired
     public OrderService(
@@ -44,7 +46,8 @@ public class OrderService {
             SnowflakeIdGenerator idGenerator,
             RedisCacheService redisCache,
             AdaptiveInventoryManager adaptiveInventory,
-            AllocationManagerV2 allocationManagerV2) {
+            AllocationManagerV2 allocationManagerV2,
+            CampaignMemoryAllocator campaignAllocator) {
         this.orderRepository = orderRepository;
         this.orderLineItemRepository = orderLineItemRepository;
         this.paymentRepository = paymentRepository;
@@ -55,6 +58,7 @@ public class OrderService {
         this.redisCache = redisCache;
         this.adaptiveInventory = adaptiveInventory;
         this.allocationManagerV2 = allocationManagerV2;
+        this.campaignAllocator = campaignAllocator;
     }
 
     @Transactional(readOnly = true)
@@ -186,11 +190,15 @@ public class OrderService {
     }
 
     /**
-     * Variant A Corrected: Adaptive inventory with producer-consumer pattern
-     * Uses AdaptiveInventoryV2 with async refills and three-tier fallback
-     * Flow: RAM reserve → Redis queue → immediate response
+     * Variant A v2: Producer-Consumer pattern with per-SKU AdaptiveInventoryUnit
+     * Uses CampaignMemoryAllocator with async refills and four-tier failover
+     * Flow: RAM cache → SpinWait → Direct Redis DECR → Ordinary Stock
+     * Redis Key: fs:{campaignId}:redis_pool:sku:{skuId}
      * Used when SKU is in active flash sale campaign.
+     *
+     * CRITICAL: NOT_SUPPORTED propagation prevents DB transaction overhead for in-memory operations
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     private OrderResponseDto createOrderVariantX(OrderCreateDto createDto, String orderNumber, UUID flashSaleId) {
         long startTime = System.nanoTime();
 
@@ -205,38 +213,39 @@ public class OrderService {
         boolean fellBackToOrdinary = false;
 
         try {
-            // Reserve each line item using AdaptiveInventoryV2
+            // Reserve each line item using CampaignMemoryAllocator (v2)
             for (OrderLineItemCreateDto itemDto : createDto.getLineItems()) {
                 UUID skuId = itemDto.getSkuId();
                 int quantity = itemDto.getQuantity();
 
-                // Reserve items one by one
+                // Reserve items one by one using dual-layer CampaignMemoryAllocator
                 for (int i = 0; i < quantity; i++) {
-                    // Get adaptive inventory v2 manager (local → campaign pool → ordinary)
-                    AdaptiveInventoryV2 inventoryManager = allocationManagerV2.getInventoryManager(skuId);
-
-                    AdaptiveInventoryV2.ReservationResult result;
-                    if (inventoryManager != null) {
-                        // Use adaptive inventory (producer-consumer pattern)
-                        result = inventoryManager.reserveItem();
-                    } else {
-                        // Fallback: No allocation units, try Redis campaign pool directly
-                        result = tryRedisCampaignPoolFallback(flashSaleId, skuId);
-                    }
+                    // Use dual-layer allocator (SPU counter + SKU cache)
+                    CampaignMemoryAllocator.ReservationResult result =
+                        campaignAllocator.reserveItem(flashSaleId, skuId);
 
                     if (!result.success) {
-                        // Completely sold out
-                        throw new IllegalStateException("SKU " + skuId + " completely sold out");
+                        switch (result.priceType) {
+                            case "sold_out":
+                                org.slf4j.LoggerFactory.getLogger(OrderService.class).warn(
+                                    "SKU {} sold out in campaign {}", skuId, flashSaleId);
+                                throw new IllegalStateException("SKU " + skuId + " sold out");
+                            case "not_allocated":
+                                org.slf4j.LoggerFactory.getLogger(OrderService.class).warn(
+                                    "SKU {} not allocated to this node", skuId);
+                                throw new IllegalStateException("SKU " + skuId + " not available on this server");
+                            default:
+                                org.slf4j.LoggerFactory.getLogger(OrderService.class).error(
+                                    "Reservation failed for SKU {}: {}", skuId, result.priceType);
+                                throw new IllegalStateException("Failed to reserve SKU " + skuId);
+                        }
                     }
 
-                    // Track what stock was used
+                    // Check if fell back to ordinary stock (benchmark stop indicator)
                     if ("ordinary".equals(result.priceType)) {
                         fellBackToOrdinary = true;
                         org.slf4j.LoggerFactory.getLogger(OrderService.class).warn(
-                            "[BENCHMARK STOP INDICATOR] Order {} using ordinary stock (price={}). " +
-                            "Campaign exhausted in this service.",
-                            orderNumber, result.price
-                        );
+                            "[BENCHMARK STOP] SKU {} using ordinary price", skuId);
                     }
 
                     totalAmount = totalAmount.add(result.price);
@@ -304,35 +313,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * Fallback when no allocation units available - try Redis campaign pool directly
-     */
-    private AdaptiveInventoryV2.ReservationResult tryRedisCampaignPoolFallback(UUID campaignId, UUID skuId) {
-        String campaignPoolKey = String.format("fs:%s:limit", campaignId);
-        Long remaining = redisCache.getRedisTemplate().opsForValue().decrement(campaignPoolKey);
-
-        if (remaining != null && remaining >= 0) {
-            return new AdaptiveInventoryV2.ReservationResult(true, "campaign", BigDecimal.valueOf(79.99));
-        } else {
-            // Restore if went negative
-            if (remaining != null && remaining < 0) {
-                redisCache.getRedisTemplate().opsForValue().increment(campaignPoolKey);
-            }
-
-            // Fall back to ordinary stock
-            String ordinaryStockKey = String.format("inv:%s", skuId);
-            remaining = redisCache.getRedisTemplate().opsForValue().decrement(ordinaryStockKey);
-
-            if (remaining != null && remaining >= 0) {
-                return new AdaptiveInventoryV2.ReservationResult(true, "ordinary", BigDecimal.valueOf(199.99));
-            } else {
-                if (remaining != null && remaining < 0) {
-                    redisCache.getRedisTemplate().opsForValue().increment(ordinaryStockKey);
-                }
-                return new AdaptiveInventoryV2.ReservationResult(false, "sold_out", BigDecimal.ZERO);
-            }
-        }
-    }
 
     /**
      * Helper class to track reserved items

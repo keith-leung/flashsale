@@ -1,6 +1,10 @@
 spring:
   application:
     name: flashsale-service
+  # Enable virtual threads for Tomcat (Java 21+)
+  threads:
+    virtual:
+      enabled: true
 
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
@@ -26,6 +30,13 @@ spring:
       host: 127.0.0.1
       port: 6380
       timeout: 2000ms
+      lettuce:
+        pool:
+          # Dramatically increase pool size for high throughput with Virtual Threads
+          max-active: 500        # Max connections (was default 8)
+          max-idle: 100          # Max idle connections
+          min-idle: 50           # Min idle connections (pre-warmed)
+          max-wait: 100ms        # Max wait for connection
 
   cache:
     type: redis
@@ -37,6 +48,12 @@ spring:
 
 server:
   port: 8080
+  tomcat:
+    threads:
+      max: 1000            # Increase from default 200
+      min-spare: 100       # Pre-warmed threads
+    max-connections: 10000 # Max concurrent connections
+    accept-count: 1000     # Queue size when all threads busy
 
 management:
   endpoints:
@@ -49,8 +66,9 @@ management:
 
 logging:
   level:
-    com.flashsale.api: INFO
-    org.springframework.cache: DEBUG
+    com.flashsale.api: WARN           # Reduce logging in hot path
+    com.flashsale.api.service: WARN   # Suppress order logs
+    org.springframework.cache: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 

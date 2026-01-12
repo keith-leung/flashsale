@@ -68,6 +68,26 @@ public class FlashSale extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    // Variant A: Memory allocation configuration
+    @Column(name = "preallocate_percentage", precision = 5, scale = 2, nullable = false)
+    private BigDecimal preallocatePercentage = new BigDecimal("60.00");
+
+    @Column(name = "redis_percentage", precision = 5, scale = 2, nullable = false)
+    private BigDecimal redisPercentage = new BigDecimal("40.00");
+
+    @Column(name = "refill_lower_watermark_pct", precision = 5, scale = 2, nullable = false)
+    private BigDecimal refillLowerWatermarkPct = new BigDecimal("25.00");
+
+    // Service allocation ratios (based on /health benchmark performance)
+    @Column(name = "csharp_allocation_ratio", nullable = false)
+    private Integer csharpAllocationRatio = 20;
+
+    @Column(name = "java_allocation_ratio", nullable = false)
+    private Integer javaAllocationRatio = 13;
+
+    @Column(name = "python_allocation_ratio", nullable = false)
+    private Integer pythonAllocationRatio = 1;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "spu_id", insertable = false, updatable = false)
     private Spu spu;
@@ -199,6 +219,54 @@ public class FlashSale extends BaseEntity {
 
     public void setSpu(Spu spu) {
         this.spu = spu;
+    }
+
+    public BigDecimal getPreallocatePercentage() {
+        return preallocatePercentage;
+    }
+
+    public void setPreallocatePercentage(BigDecimal preallocatePercentage) {
+        this.preallocatePercentage = preallocatePercentage;
+    }
+
+    public BigDecimal getRedisPercentage() {
+        return redisPercentage;
+    }
+
+    public void setRedisPercentage(BigDecimal redisPercentage) {
+        this.redisPercentage = redisPercentage;
+    }
+
+    public BigDecimal getRefillLowerWatermarkPct() {
+        return refillLowerWatermarkPct;
+    }
+
+    public void setRefillLowerWatermarkPct(BigDecimal refillLowerWatermarkPct) {
+        this.refillLowerWatermarkPct = refillLowerWatermarkPct;
+    }
+
+    public Integer getCsharpAllocationRatio() {
+        return csharpAllocationRatio;
+    }
+
+    public void setCsharpAllocationRatio(Integer csharpAllocationRatio) {
+        this.csharpAllocationRatio = csharpAllocationRatio;
+    }
+
+    public Integer getJavaAllocationRatio() {
+        return javaAllocationRatio;
+    }
+
+    public void setJavaAllocationRatio(Integer javaAllocationRatio) {
+        this.javaAllocationRatio = javaAllocationRatio;
+    }
+
+    public Integer getPythonAllocationRatio() {
+        return pythonAllocationRatio;
+    }
+
+    public void setPythonAllocationRatio(Integer pythonAllocationRatio) {
+        this.pythonAllocationRatio = pythonAllocationRatio;
     }
 
     @Override

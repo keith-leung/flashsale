@@ -25,8 +25,8 @@ else:
     # AsyncEngine uses AsyncAdaptedQueuePool by default (async-safe)
     pool_class = None  # Let async engine use its default pool
     pool_kwargs = {
-        "pool_size": 2,              # 2 connections per worker (48 workers = 96 base)
-        "max_overflow": 1,           # Allow 1 extra per worker (48 workers = 48 extra)
+        "pool_size": 10,             # 10 connections per worker (16 workers = 160 base)
+        "max_overflow": 10,          # Allow 10 extra per worker (16 workers = 160 extra)
         "pool_timeout": 30.0,        # Wait up to 30s for connection
         "pool_recycle": 3600,        # Recycle connections after 1 hour
         "pool_pre_ping": True,       # Verify connections before use

@@ -12,7 +12,11 @@ import org.springframework.stereotype.Service;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +33,15 @@ public class RedisCacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+
+    // Async executor for fire-and-forget order queuing using Java 21 Virtual Threads
+    // Virtual threads are extremely lightweight (~1KB vs ~1MB for platform threads)
+    // Perfect for I/O-bound operations like Redis writes
+    private final Executor asyncOrderExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    // Metrics for monitoring async queue
+    private final AtomicLong asyncQueuedCount = new AtomicLong(0);
+    private final AtomicLong asyncErrorCount = new AtomicLong(0);
 
     @Autowired
     public RedisCacheService(RedisTemplate<String, Object> redisTemplate, ObjectMapper objectMapper) {
@@ -222,20 +235,42 @@ public class RedisCacheService {
     }
 
     /**
-     * Queue order for async batch processing
+     * Queue order for async batch processing (FIRE-AND-FORGET)
+     *
+     * This method is now non-blocking - it submits the Redis write to a
+     * background thread pool and returns immediately. This eliminates the
+     * blocking I/O bottleneck that limited throughput to ~11K req/s.
+     *
+     * Trade-off: Orders may be lost if the service crashes before Redis write completes.
+     * For flash sales, this is acceptable as inventory was already decremented atomically.
      */
     public void queueOrder(Map<String, Object> orderData) {
-        try {
-            String jsonData = objectMapper.writeValueAsString(orderData);
-            Map<String, String> streamData = new HashMap<>();
-            streamData.put("order_data", jsonData);
+        // Fire-and-forget: Submit to async executor and return immediately
+        CompletableFuture.runAsync(() -> {
+            try {
+                String jsonData = objectMapper.writeValueAsString(orderData);
+                Map<String, String> streamData = new HashMap<>();
+                streamData.put("order_data", jsonData);
 
-            redisTemplate.opsForStream().add(ORDER_QUEUE, streamData);
-            logger.debug("Order queued to Redis stream: {}", ORDER_QUEUE);
-        } catch (Exception e) {
-            logger.error("Failed to queue order to Redis stream", e);
-            throw new RuntimeException("Failed to queue order", e);
-        }
+                redisTemplate.opsForStream().add(ORDER_QUEUE, streamData);
+                asyncQueuedCount.incrementAndGet();
+                logger.debug("Order queued to Redis stream: {}", ORDER_QUEUE);
+            } catch (Exception e) {
+                asyncErrorCount.incrementAndGet();
+                logger.error("Failed to queue order to Redis stream (async)", e);
+                // Don't rethrow - fire-and-forget semantics
+            }
+        }, asyncOrderExecutor);
+    }
+
+    /**
+     * Get async queue metrics for monitoring
+     */
+    public Map<String, Long> getAsyncQueueMetrics() {
+        Map<String, Long> metrics = new HashMap<>();
+        metrics.put("async_queued_count", asyncQueuedCount.get());
+        metrics.put("async_error_count", asyncErrorCount.get());
+        return metrics;
     }
 
     /**

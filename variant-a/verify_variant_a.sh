@@ -1,23 +1,23 @@
 #!/bin/bash
 # =============================================================================
-# SACRED VERIFICATION - Variant A Adaptive Inventory Verification
+# Variant A Verification - Adaptive Inventory Verification
 # =============================================================================
-# This verifies Variant A compliance with SACRED policies and validates
-# the adaptive 2-tier batching implementation.
+# This verifies Variant A functionality and validates the adaptive 2-tier
+# batching implementation with FIXED dual-layer tracking.
 #
-# Usage: bash SACRED_VERIFICATION.sh
+# Usage: bash verify_variant_a.sh
 #
 # This script verifies:
 #   1. All services are running
 #   2. Health checks pass
-#   3. SACRED schema compliance
+#   3. Database schema compatibility
 #   4. Basic order creation works
 #   5. Adaptive inventory batching works
 #   6. Order logging works
 #
 # Exit codes:
-#   0 = SACRED VERIFICATION PASSED
-#   1 = SACRED VERIFICATION FAILED
+#   0 = Variant A Verification PASSED
+#   1 = Variant A Verification FAILED
 # =============================================================================
 
 set -e
@@ -32,8 +32,8 @@ NC='\033[0m'
 
 echo -e "${BOLD}${BLUE}"
 echo "═════════════════════════════════════════════════════════════════"
-echo "                   SACRED VERIFICATION"
-echo "           Variant A Adaptive Inventory Verification"
+echo "                   Variant A Verification"
+echo "        Adaptive Inventory with FIXED Dual-Layer Tracking"
 echo "═════════════════════════════════════════════════════════════════"
 echo -e "${NC}"
 echo ""
@@ -73,7 +73,7 @@ for container in "${CONTAINERS[@]}"; do
         echo -e "${GREEN}  ✓ ${container}: ${STATUS}${NC}"
     else
         echo -e "${RED}  ✗ ${container}: ${STATUS}${NC}"
-        echo -e "${RED}SACRED VERIFICATION FAILED: ${container} not running${NC}"
+        echo -e "${RED}Variant A Verification FAILED: ${container} not running${NC}"
         exit 1
     fi
 done
@@ -95,7 +95,7 @@ for i in {1..20}; do
 
     if [ $i -eq 20 ]; then
         echo -e "${RED}✗ Services not responding after 60s${NC}"
-        echo -e "${RED}SACRED VERIFICATION FAILED: Health checks timed out${NC}"
+        echo -e "${RED}Variant A Verification FAILED: Health checks timed out${NC}"
         exit 1
     fi
 
@@ -108,7 +108,7 @@ if curl -sf http://localhost:30013/health > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Python health OK${NC}"
 else
     echo -e "${RED}✗ Python health FAILED${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Python health check${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Python health check${NC}"
     exit 1
 fi
 
@@ -116,7 +116,7 @@ if curl -sf http://localhost:8017/health > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Java health OK${NC}"
 else
     echo -e "${RED}✗ Java health FAILED${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Java health check${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Java health check${NC}"
     exit 1
 fi
 
@@ -124,7 +124,7 @@ if curl -sf http://localhost:30014/health > /dev/null 2>&1; then
     echo -e "${GREEN}✓ C# health OK${NC}"
 else
     echo -e "${RED}✗ C# health FAILED${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: C# health check${NC}"
+    echo -e "${RED}Variant A Verification FAILED: C# health check${NC}"
     exit 1
 fi
 
@@ -133,7 +133,7 @@ if docker exec flash-mariadb-a mysql -usyracuse -pOrange_315_Forever! -e "SELECT
     echo -e "${GREEN}✓ MariaDB connection OK${NC}"
 else
     echo -e "${RED}✗ MariaDB connection FAILED${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Database connection${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Database connection${NC}"
     exit 1
 fi
 
@@ -142,21 +142,21 @@ if docker exec flash-redis-a redis-cli PING > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Redis connection OK${NC}"
 else
     echo -e "${RED}✗ Redis connection FAILED${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Redis connection${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Redis connection${NC}"
     exit 1
 fi
 
 # =============================================================================
-# Step 3: SACRED Schema Compliance
+# Step 3: Database Schema Compatibility
 # =============================================================================
-echo -e "\n${YELLOW}[Step 3/7] Verifying SACRED schema compliance...${NC}"
+echo -e "\n${YELLOW}[Step 3/7] Verifying database schema compatibility...${NC}"
 
 # Check flash_sale_campaigns table exists
 if docker exec flash-mariadb-a mysql -usyracuse -pOrange_315_Forever! orange315 -e "SHOW TABLES LIKE 'flash_sale_campaigns'" 2>&1 | grep -q "flash_sale_campaigns"; then
     echo -e "${GREEN}✓ flash_sale_campaigns table exists${NC}"
 else
     echo -e "${RED}✗ flash_sale_campaigns table missing${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Schema violation${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Schema violation${NC}"
     exit 1
 fi
 
@@ -165,16 +165,16 @@ if docker exec flash-mariadb-a mysql -usyracuse -pOrange_315_Forever! orange315 
     echo -e "${GREEN}✓ orders.flash_sale_campaign_id field exists${NC}"
 else
     echo -e "${RED}✗ orders.flash_sale_campaign_id field missing${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Schema violation${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Schema violation${NC}"
     exit 1
 fi
 
 # Verify Syracuse credentials
-if docker exec flash-mariadb-a mysql -usyracuse -pOrange_315_Forever! orange315 -e "SELECT 'SACRED' as credential_check" 2>&1 | grep -q "SACRED"; then
+if docker exec flash-mariadb-a mysql -usyracuse -pOrange_315_Forever! orange315 -e "SELECT 1" 2>&1 | grep -q "1"; then
     echo -e "${GREEN}✓ Syracuse credentials valid (orange315, syracuse, Orange_315_Forever!)${NC}"
 else
     echo -e "${RED}✗ Syracuse credentials invalid${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Credential violation${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Credential violation${NC}"
     exit 1
 fi
 
@@ -189,7 +189,7 @@ if [ -n "$LUA_SHA" ]; then
     echo -e "${GREEN}✓ Lua script loaded: ${LUA_SHA}${NC}"
 else
     echo -e "${RED}✗ Lua script not loaded${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Adaptive inventory not initialized${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Adaptive inventory not initialized${NC}"
     exit 1
 fi
 
@@ -198,7 +198,7 @@ if docker logs flash-python-a 2>&1 | grep -q "Adaptive Inventory Manager initial
     echo -e "${GREEN}✓ Adaptive Inventory Manager initialized${NC}"
 else
     echo -e "${RED}✗ Adaptive Inventory Manager not initialized${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Adaptive inventory not initialized${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Adaptive inventory not initialized${NC}"
     exit 1
 fi
 
@@ -227,26 +227,43 @@ DELETE FROM inventory WHERE sku_id = '650e8400-e29b-41d4-a716-446655440001';
 INSERT INTO inventory (id, sku_id, quantity, reserved_quantity, allow_negative_stock, created_at, updated_at)
 VALUES (UUID(), '650e8400-e29b-41d4-a716-446655440001', 10000, 0, 0, NOW(), NOW());
 
--- Create flash sale campaign
-INSERT IGNORE INTO flash_sale_campaigns (id, name, description, spu_id, total_sale_limit, sold_quantity, max_quantity_per_customer, flash_price, start_time, end_time, status, is_active, created_at, updated_at)
-VALUES ('750e8400-e29b-41d4-a716-446655440000', 'Test Campaign A', 'Test campaign for Variant A adaptive batching', '650e8400-e29b-41d4-a716-446655440000', 10000, 0, 10, 79.99, '2025-01-01 00:00:00', '2030-12-31 23:59:59', 'active', 1, NOW(), NOW());
+-- Create flash_sale_campaigns
+INSERT IGNORE INTO flash_sale_campaigns (
+    id, name, description, spu_id, 
+    total_sale_limit, sold_quantity, max_quantity_per_customer, 
+    flash_price, start_time, end_time, status, is_active, 
+    created_at, updated_at,
+    preallocate_percentage, redis_percentage, refill_lower_watermark_pct
+)
+VALUES (
+    '750e8400-e29b-41d4-a716-446655440000', 'Test Campaign A', 'Test campaign for Variant A adaptive batching', 
+    '650e8400-e29b-41d4-a716-446655440000', 
+    10000, 0, 10, 
+    79.99, '2025-01-01 00:00:00', '2030-12-31 23:59:59', 
+    'active', 1, 
+    NOW(), NOW(),
+    60.00, 40.00, 25.00
+);
 EOF
 
-    # Initialize Redis counter
-    docker exec flash-redis-a redis-cli SET "fs:750e8400-e29b-41d4-a716-446655440000:sku:650e8400-e29b-41d4-a716-446655440001:limit" 10000 > /dev/null
+    # Initialize Redis Pools using the Python script (Correct V2 Logic)
+    echo -e "${BLUE}Initializing Redis Pools via init_redis_pools.py...${NC}"
+    docker exec flash-python-a python /app/init_redis_pools.py --campaign_id 750e8400-e29b-41d4-a716-446655440000
 
-    echo -e "${GREEN}✓ Test campaign created${NC}"
+    echo -e "${GREEN}✓ Test campaign created and pools initialized${NC}"
 else
     echo -e "${GREEN}✓ Test campaign already exists${NC}"
+    # Ensure pools are init even if campaign exists
+    docker exec flash-python-a python /app/init_redis_pools.py --campaign_id 750e8400-e29b-41d4-a716-446655440000
 fi
 
-# Verify Redis counter
-REDIS_COUNT=$(docker exec flash-redis-a redis-cli GET "fs:750e8400-e29b-41d4-a716-446655440000:sku:650e8400-e29b-41d4-a716-446655440001:limit")
-if [ -n "$REDIS_COUNT" ] && [ "$REDIS_COUNT" -gt 0 ]; then
-    echo -e "${GREEN}✓ Redis inventory counter initialized: ${REDIS_COUNT} items${NC}"
+# Verify Redis Pool
+REDIS_POOL_VAL=$(docker exec flash-redis-a redis-cli GET "fs:750e8400-e29b-41d4-a716-446655440000:redis_pool:sku:650e8400-e29b-41d4-a716-446655440001")
+if [ -n "$REDIS_POOL_VAL" ] && [ "$REDIS_POOL_VAL" -gt 0 ]; then
+    echo -e "${GREEN}✓ Redis SKU Pool initialized: ${REDIS_POOL_VAL} items${NC}"
 else
-    echo -e "${RED}✗ Redis inventory counter not initialized${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: Redis counter missing${NC}"
+    echo -e "${RED}✗ Redis SKU Pool not initialized${NC}"
+    echo -e "${RED}Variant A Verification FAILED: Redis pool missing${NC}"
     exit 1
 fi
 
@@ -265,7 +282,7 @@ for i in {1..5}; do
       -H "Content-Type: application/json" \
       -d '{
         "customer_email": "verify'$i'@example.com",
-        "customer_name": "SACRED Verify '$i'",
+        "customer_name": "Variant A Test '$i'",
         "line_items": [
           {
             "sku_id": "650e8400-e29b-41d4-a716-446655440001",
@@ -276,12 +293,12 @@ for i in {1..5}; do
         "currency": "USD"
       }' 2>&1)
 
-    if echo "$RESPONSE" | grep -q '"status": 201'; then
+    if echo "$RESPONSE" | grep -q '"status":[[:space:]]*201'; then
         SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
     else
         echo -e "${RED}✗ Order $i failed${NC}"
         echo "$RESPONSE"
-        echo -e "${RED}SACRED VERIFICATION FAILED: Order creation failed${NC}"
+        echo -e "${RED}Variant A Verification FAILED: Order creation failed${NC}"
         exit 1
     fi
 done
@@ -313,29 +330,29 @@ if curl -sS http://localhost:30013/api/v1/orders -X POST -H "Content-Type: appli
     echo -e "${GREEN}✓ Universal /api/v1/orders endpoint exists${NC}"
 else
     echo -e "${RED}✗ Universal /api/v1/orders endpoint not found${NC}"
-    echo -e "${RED}SACRED VERIFICATION FAILED: API endpoint violation${NC}"
+    echo -e "${RED}Variant A Verification FAILED: API endpoint violation${NC}"
     exit 1
 fi
 
 # =============================================================================
-# SACRED VERIFICATION PASSED
+# Variant A Verification PASSED
 # =============================================================================
 echo -e "\n${BOLD}${GREEN}"
 echo "═════════════════════════════════════════════════════════════════"
-echo "              ✓ SACRED VERIFICATION PASSED ✓"
+echo "              ✓ Variant A Verification PASSED ✓"
 echo "═════════════════════════════════════════════════════════════════"
 echo -e "${NC}"
 
-echo -e "${GREEN}Variant A is SACRED COMPLIANT and ready for:${NC}"
+echo -e "${GREEN}Variant A is verified and ready for:${NC}"
 echo "  • Benchmarking and performance testing"
 echo "  • Production deployment"
 echo "  • Further development"
 echo ""
-echo -e "${BLUE}SACRED Compliance Summary:${NC}"
-echo "  ✓ Policy 0: Syracuse credentials (orange315, syracuse, Orange_315_Forever!)"
-echo "  ✓ Policy 1: SACRED schema (flash_sale_campaigns, flash_sale_campaign_id)"
-echo "  ✓ Policy 3: Complete isolation (dedicated MariaDB, Redis, network)"
-echo "  ✓ Policy 4: Functionality verified (order creation works)"
+echo -e "${BLUE}Verification Summary:${NC}"
+echo "  ✓ Syracuse credentials (orange315, syracuse, Orange_315_Forever!)"
+echo "  ✓ Flash sale schema (flash_sale_campaigns, flash_sale_campaign_id)"
+echo "  ✓ Complete isolation (dedicated MariaDB, Redis, network)"
+echo "  ✓ Functionality verified (order creation works)"
 echo ""
 echo -e "${BLUE}Adaptive Inventory Status:${NC}"
 echo "  ✓ Lua Script SHA: ${LUA_SHA}"

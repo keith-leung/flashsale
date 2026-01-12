@@ -120,28 +120,44 @@ async def create_order(
 
         if use_variant_x:
             # ============================================================
-            # VARIANT A CORRECTED: Adaptive Inventory with Local Memory
+            # VARIANT A FIXED: Dual-Layer Tracking (SPU + SKU)
             # ============================================================
-            from app.api.endpoints.orders_v2 import create_order_variant_a_corrected
-            from app.startup_allocations import get_adaptive_manager
+            from app.api.endpoints.orders_variant_a_fixed import create_order_variant_a_fixed
+            from app.main import get_campaign_allocator
 
             try:
-                adaptive_manager = get_adaptive_manager()
-                return await create_order_variant_a_corrected(
+                # Use FIXED allocator with dual-layer tracking
+                allocator = get_campaign_allocator()
+                return await create_order_variant_a_fixed(
                     order_data=order_data,
                     order_number=order_number,
                     flash_sale_id=flash_sale_id,
                     sku_metadata=sku_metadata,
-                    adaptive_manager=adaptive_manager,
+                    allocator=allocator,
                     background_tasks=background_tasks,
                     db=db
                 )
             except RuntimeError as e:
-                # Fallback to old implementation if adaptive manager not initialized
-                logger.warning(f"Adaptive manager not initialized, falling back: {e}")
-                return await _create_order_variant_x(
-                    order_data, order_number, flash_sale_id, sku_metadata, background_tasks, db
-                )
+                # Fallback to old implementation if allocator not initialized
+                logger.warning(f"Campaign allocator not initialized, trying old approach: {e}")
+                try:
+                    from app.api.endpoints.orders_v2 import create_order_variant_a_corrected
+                    from app.startup_allocations import get_adaptive_manager
+                    adaptive_manager = get_adaptive_manager()
+                    return await create_order_variant_a_corrected(
+                        order_data=order_data,
+                        order_number=order_number,
+                        flash_sale_id=flash_sale_id,
+                        sku_metadata=sku_metadata,
+                        adaptive_manager=adaptive_manager,
+                        background_tasks=background_tasks,
+                        db=db
+                    )
+                except Exception as e2:
+                    logger.error(f"Both allocators failed: {e2}")
+                    return await _create_order_variant_x(
+                        order_data, order_number, flash_sale_id, sku_metadata, background_tasks, db
+                    )
         else:
             # ============================================================
             # VARIANT Y: Database Transaction (Regular Order Path)

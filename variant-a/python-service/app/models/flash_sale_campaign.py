@@ -51,6 +51,20 @@ class FlashSaleCampaign(Base):
     status = Column(String(20), default="scheduled", nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # Variant A: Memory allocation configuration
+    preallocate_percentage = Column(Numeric(5, 2), default=60.00, nullable=False)  # % preallocated to service nodes
+    redis_percentage = Column(Numeric(5, 2), default=40.00, nullable=False)  # % kept in Redis for fallback
+    refill_lower_watermark_pct = Column(Numeric(5, 2), default=25.00, nullable=False)  # % threshold for async refill
+
+    # Service allocation ratios (based on /health benchmark performance)
+    csharp_allocation_ratio = Column(Integer, default=20, nullable=False)  # C# service weight
+    java_allocation_ratio = Column(Integer, default=13, nullable=False)  # Java service weight
+    python_allocation_ratio = Column(Integer, default=1, nullable=False)  # Python service weight
+
+    # Tracking fields
+    preallocated_at = Column(DateTime, nullable=True)  # When items were preallocated to service nodes
+    writeback_at = Column(DateTime, nullable=True)  # When final results were written back to DB
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

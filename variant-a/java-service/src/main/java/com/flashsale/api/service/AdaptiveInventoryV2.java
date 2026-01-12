@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -36,7 +37,7 @@ public class AdaptiveInventoryV2 {
 
     // Redis client
     private final RedisTemplate<String, Object> redisTemplate;
-    private final String campaignPoolKey;  // fs:{campaignId}:limit
+    private final String skuPoolKey;  // fs:{campaignId}:redis_pool:sku:{skuId}
 
     // Local stock management (Producer-Consumer)
     private final AtomicInteger localStock;
@@ -76,12 +77,12 @@ public class AdaptiveInventoryV2 {
         int initialLowWaterMark = (int) (allocatedQuantity * lowWaterMarkPct.doubleValue());
         this.currentLowWaterMark = new AtomicInteger(initialLowWaterMark);
 
-        // Redis key for campaign pool
-        this.campaignPoolKey = String.format("fs:%s:limit", campaignId);
+        // Redis key for campaign pool (Partitioned SKU pool)
+        this.skuPoolKey = String.format("fs:%s:redis_pool:sku:%s", campaignId, skuId);
 
         logger.info(
-            "[Allocation {}] Initialized: {} items in RAM, low_water_mark={}, refill_batch={}",
-            allocationId, allocatedQuantity, initialLowWaterMark, refillBatchSize
+            "[Allocation {}] Initialized: {} items in RAM, low_water_mark={}, refill_batch={}, source={}",
+            allocationId, allocatedQuantity, initialLowWaterMark, refillBatchSize, skuPoolKey
         );
     }
 
@@ -118,28 +119,30 @@ public class AdaptiveInventoryV2 {
 
     /**
      * Handle depleted local stock
-     * - Spin wait briefly (5-10ms) in case refill is in progress
+     * - Yield CPU briefly (up to 5ms total) in case refill is in progress
+     * - Uses LockSupport.parkNanos instead of busy-wait to avoid CPU burn
      * - If still no stock, fall back to Redis campaign pool
      */
     private ReservationResult handleDepleted() {
-        long spinStart = System.nanoTime();
-        long spinDeadline = spinStart + 10_000_000; // 10ms max spin
-
-        while (System.nanoTime() < spinDeadline) {
-            Thread.onSpinWait(); // CPU hint for spin-wait
-
+        // Try up to 5 times with 1ms yield each (5ms total max)
+        for (int attempt = 0; attempt < 5; attempt++) {
             int current = localStock.get();
             if (current > 0) {
                 if (localStock.compareAndSet(current, current - 1)) {
                     ramHits.incrementAndGet();
                     return new ReservationResult(true, "campaign", BigDecimal.valueOf(79.99));
                 }
+                // CAS failed, retry immediately
+                continue;
             }
 
             // Check if should give up (no refill in progress and still 0)
             if (!refillInProgress.get() && localStock.get() == 0) {
                 break;
             }
+
+            // Yield CPU for 1ms instead of busy-waiting (frees thread for other work)
+            LockSupport.parkNanos(1_000_000); // 1ms
         }
 
         // Fallback: Try Redis campaign pool directly
@@ -173,7 +176,7 @@ public class AdaptiveInventoryV2 {
             }
 
             // DECRBY Redis campaign pool (ONLY HERE - rare Redis call!)
-            Long campaignRemaining = redisTemplate.opsForValue().decrement(campaignPoolKey, refillAmount);
+            Long campaignRemaining = redisTemplate.opsForValue().decrement(skuPoolKey, refillAmount);
 
             if (campaignRemaining != null && campaignRemaining >= 0) {
                 // Success: Add to local stock
@@ -202,7 +205,7 @@ public class AdaptiveInventoryV2 {
                 }
             } else {
                 // Campaign pool depleted, rollback
-                redisTemplate.opsForValue().increment(campaignPoolKey, refillAmount);
+                redisTemplate.opsForValue().increment(skuPoolKey, refillAmount);
                 logger.warn(
                     "[Allocation {}] Refill FAILED: campaign pool depleted",
                     allocationId
@@ -220,7 +223,7 @@ public class AdaptiveInventoryV2 {
      * Try to reserve from Redis campaign pool directly (fallback tier 2)
      */
     private ReservationResult tryRedisCampaignPool() {
-        Long remaining = redisTemplate.opsForValue().decrement(campaignPoolKey);
+        Long remaining = redisTemplate.opsForValue().decrement(skuPoolKey);
 
         if (remaining != null && remaining >= 0) {
             campaignPoolHits.incrementAndGet();
@@ -232,7 +235,7 @@ public class AdaptiveInventoryV2 {
         } else {
             // Restore if went negative
             if (remaining != null && remaining < 0) {
-                redisTemplate.opsForValue().increment(campaignPoolKey);
+                redisTemplate.opsForValue().increment(skuPoolKey);
             }
 
             // Campaign pool exhausted, fall back to ordinary stock (tier 3)

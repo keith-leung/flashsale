@@ -63,12 +63,14 @@ class AdaptiveInventoryUnit:
         self._redis_direct_hits = 0  # Fell back to Redis campaign pool
 
         # Redis keys
-        self._campaign_pool_key = f"fs:{campaign_id}:limit"  # Campaign pool in Redis
+        # Refill from SKU-specific pool (Partitioned Layer 2)
+        self._campaign_pool_key = f"fs:{campaign_id}:redis_pool:sku:{sku_id}"
         self._ordinary_stock_key = f"inv:{sku_id}"  # Ordinary stock fallback
 
         logger.info(
             f"[Allocation {allocation_id}] Initialized: {allocated_quantity} items, "
-            f"refill_batch={refill_batch_size}, low_water_mark={self._current_low_water_mark}"
+            f"refill_batch={refill_batch_size}, low_water_mark={self._current_low_water_mark}, "
+            f"refill_source={self._campaign_pool_key}"
         )
 
     async def reserve_item(self) -> tuple[bool, str, float]:

@@ -55,7 +55,7 @@ public class AdaptiveInventoryService
         _skuId = skuId;
         _db = db;
         _luaScriptSha = luaScriptSha;
-        _inventoryKey = $"fs:{campaignId}:sku:{skuId}:limit";
+        _inventoryKey = $"fs:{campaignId}:redis_pool:sku:{skuId}";
     }
 
     /// <summary>

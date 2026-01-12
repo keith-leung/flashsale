@@ -2,6 +2,7 @@ using AutoMapper;
 using FlashSale.Api.Data;
 using FlashSale.Api.DTOs;
 using FlashSale.Api.Models;
+using FlashSaleAPI.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace FlashSale.Api.Services;
@@ -13,16 +14,16 @@ public class OrderService : IOrderService
     private readonly ILogger<OrderService> _logger;
     private readonly CSharpSnowflakeGenerator _idGenerator;
     private readonly RedisCacheService _redisCache;
-    private readonly AllocationManagerV2 _allocationManager;
+    private readonly CampaignMemoryAllocator _campaignAllocator;
 
-    public OrderService(FlashSaleDbContext context, IMapper mapper, ILogger<OrderService> logger, CSharpSnowflakeGenerator idGenerator, RedisCacheService redisCache, AllocationManagerV2 allocationManager)
+    public OrderService(FlashSaleDbContext context, IMapper mapper, ILogger<OrderService> logger, CSharpSnowflakeGenerator idGenerator, RedisCacheService redisCache, CampaignMemoryAllocator campaignAllocator)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
         _idGenerator = idGenerator;
         _redisCache = redisCache;
-        _allocationManager = allocationManager;
+        _campaignAllocator = campaignAllocator;
     }
 
     public async Task<IEnumerable<OrderResponseDto>> GetAllAsync(int skip = 0, int take = 100, string? customerEmail = null)
@@ -207,81 +208,82 @@ public class OrderService : IOrderService
     }
 
     /// <summary>
-    /// Variant A: Allocation-based adaptive inventory with async refills
-    /// Uses database allocation units loaded into RAM (99%+ network I/O reduction)
-    /// Used when SKU is in active flash sale campaign.
+    /// Variant A: Dual-layer inventory with preallocated memory (99%+ zero network I/O)
+    ///
+    /// Architecture:
+    /// - Layer 1: SPU counter (campaign-wide limit) - enforces total campaign limit
+    /// - Layer 2: SKU caches (per-SKU inventory) - tracks individual variants
+    ///
+    /// Flow: Check SPU counter → decrement → check SKU cache → decrement → success
+    /// If SPU depleted: async refill from Redis pool (non-blocking)
+    ///
+    /// Orders queue to Redis for write-back AFTER campaign ends.
     /// </summary>
     private async Task<OrderResponseDto> CreateOrderVariantAAsync(OrderCreateDto dto, string orderNumber, Guid flashSaleId)
     {
-        _logger.LogInformation("Using Variant A (Adaptive) for order {OrderNumber}, flash sale {FlashSaleId}", orderNumber, flashSaleId);
+        _logger.LogDebug("Variant A (Dual-Layer) for order {OrderNumber}, campaign {FlashSaleId}", orderNumber, flashSaleId);
 
-        // Step 1: Reserve from campaign limit (still needed at campaign level)
-        var totalQuantity = dto.LineItems.Sum(item => item.Quantity);
-        var campaignRemaining = await _redisCache.ReserveCampaignInventoryAsync(flashSaleId, totalQuantity);
-
-        if (campaignRemaining < 0)
-        {
-            _logger.LogWarning("Campaign {FlashSaleId} sold out, remaining: {Remaining}", flashSaleId, campaignRemaining);
-            throw new InvalidOperationException("Flash sale campaign sold out");
-        }
-
-        // Step 2: Reserve each SKU inventory using Adaptive Inventory Service
-        var reservedSkus = new List<(Guid SkuId, int Quantity)>();
+        // Reserve each SKU using dual-layer CampaignMemoryAllocator
+        // SPU counter (Layer 1) ensures campaign-wide limit
+        // SKU cache (Layer 2) tracks per-SKU inventory
+        var reservedItems = new List<(Guid SkuId, int Quantity, decimal UnitPrice)>();
+        decimal subtotal = 0;
 
         try
         {
             foreach (var itemDto in dto.LineItems)
             {
-                // Get adaptive inventory manager for this SKU (allocation-based)
-                var inventory = _allocationManager.GetInventoryForSku(itemDto.SkuId);
+                decimal itemPrice = 0;
+                decimal itemSubtotal = 0;
 
-                if (inventory == null)
-                {
-                    // This service instance doesn't have allocation units for this SKU
-                    // Fall back to direct Redis campaign pool
-                    _logger.LogWarning("No allocation units for SKU {SkuId}, using fallback", itemDto.SkuId);
-
-                    // Already reserved from campaign pool above, so just continue
-                    reservedSkus.Add((itemDto.SkuId, itemDto.Quantity));
-                    continue;
-                }
-
-                // Reserve items using allocation-based adaptive inventory
-                bool reserved = true;
+                // Reserve items using dual-layer allocator (one at a time for quantity > 1)
                 for (int i = 0; i < itemDto.Quantity; i++)
                 {
-                    var (success, priceType, price) = await inventory.ReserveItemAsync();
-                    if (!success)
+                    var result = _campaignAllocator.ReserveItem(flashSaleId, itemDto.SkuId);
+
+                    if (!result.Success)
                     {
-                        reserved = false;
-                        break;
+                        switch (result.PriceType)
+                        {
+                            case "sold_out":
+                                _logger.LogWarning("SKU {SkuId} sold out in campaign {CampaignId}", itemDto.SkuId, flashSaleId);
+                                throw new InvalidOperationException($"SKU {itemDto.SkuId} sold out");
+
+                            case "not_allocated":
+                                _logger.LogWarning("SKU {SkuId} not allocated to this node", itemDto.SkuId);
+                                throw new InvalidOperationException($"SKU {itemDto.SkuId} not available on this server");
+
+                            default:
+                                _logger.LogError("Reservation failed for SKU {SkuId}: {PriceType}", itemDto.SkuId, result.PriceType);
+                                throw new InvalidOperationException($"Failed to reserve SKU {itemDto.SkuId}");
+                        }
                     }
+
+                    // Check if fell back to ordinary stock (benchmark stop indicator)
+                    if (result.PriceType == "ordinary")
+                    {
+                        _logger.LogWarning("[BENCHMARK STOP] SKU {SkuId} using ordinary price", itemDto.SkuId);
+                    }
+
+                    // Capture the price from first successful reservation
+                    if (i == 0)
+                    {
+                        itemPrice = result.Price;
+                    }
+                    itemSubtotal += result.Price;
                 }
 
-                if (!reserved)
-                {
-                    // Rollback campaign inventory on error
-                    await _redisCache.ReleaseCampaignInventoryAsync(flashSaleId, totalQuantity);
-
-                    throw new InvalidOperationException($"SKU {itemDto.SkuId} sold out");
-                }
-
-                reservedSkus.Add((itemDto.SkuId, itemDto.Quantity));
+                subtotal += itemSubtotal;
+                reservedItems.Add((itemDto.SkuId, itemDto.Quantity, itemPrice));
             }
 
-            // Step 3: Queue order for async database persistence
-            var lineItems = new List<Dictionary<string, object>>();
-
-            foreach (var itemDto in dto.LineItems)
+            // Queue order for async write-back (after campaign ends)
+            var lineItemsPayload = reservedItems.Select(item => new Dictionary<string, object>
             {
-                var skuMeta = await _redisCache.GetSkuMetaAsync(itemDto.SkuId);
-                lineItems.Add(new Dictionary<string, object>
-                {
-                    ["sku_id"] = itemDto.SkuId.ToString(),
-                    ["quantity"] = itemDto.Quantity,
-                    ["unit_price"] = skuMeta?.GetValueOrDefault("price", "0") ?? "0"
-                });
-            }
+                ["sku_id"] = item.SkuId.ToString(),
+                ["quantity"] = item.Quantity,
+                ["unit_price"] = item.UnitPrice.ToString("F2")
+            }).ToList();
 
             var orderPayload = new Dictionary<string, object>
             {
@@ -289,13 +291,14 @@ public class OrderService : IOrderService
                 ["customer_email"] = dto.CustomerEmail,
                 ["customer_name"] = dto.CustomerName ?? "",
                 ["flash_sale_id"] = flashSaleId.ToString(),
-                ["line_items"] = lineItems
+                ["line_items"] = lineItemsPayload,
+                ["subtotal"] = subtotal.ToString("F2"),
+                ["created_at"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 
             await _redisCache.QueueOrderAsync(orderPayload);
 
-            // Step 4: Build response (order will be persisted async)
-            _logger.LogInformation("Order {OrderNumber} reserved successfully (Variant A), queued for persistence", orderNumber);
+            _logger.LogDebug("Order {OrderNumber} reserved (Variant A dual-layer), queued for write-back", orderNumber);
 
             return new OrderResponseDto
             {
@@ -303,15 +306,16 @@ public class OrderService : IOrderService
                 CustomerEmail = dto.CustomerEmail,
                 CustomerName = dto.CustomerName,
                 FlashSaleCampaignId = flashSaleId,
-                Status = OrderStatus.Pending
+                Status = OrderStatus.Pending,
+                Subtotal = subtotal,
+                TotalAmount = subtotal + dto.TaxAmount + dto.ShippingAmount
             };
         }
-        catch
+        catch (Exception ex)
         {
-            // Rollback campaign inventory on error
-            // Note: Adaptive inventory doesn't support easy rollback (items consumed from local cache)
-            // In production, implement compensation logic or accept small inventory variance
-            await _redisCache.ReleaseCampaignInventoryAsync(flashSaleId, totalQuantity);
+            // Note: Dual-layer doesn't support easy rollback (items consumed from local cache)
+            // In production, implement compensation or accept small variance
+            _logger.LogError(ex, "Order {OrderNumber} failed in Variant A", orderNumber);
             throw;
         }
     }

@@ -27,7 +27,7 @@ public class AdaptiveInventoryV2
 
     // Redis client
     private readonly IDatabase _redis;
-    private readonly string _campaignPoolKey;  // fs:{campaignId}:limit
+    private readonly string _skuPoolKey;  // fs:{campaignId}:redis_pool:sku:{skuId}
 
     // Local stock management (Producer-Consumer)
     private int _localStock;
@@ -69,12 +69,12 @@ public class AdaptiveInventoryV2
         // Calculate initial low water mark (30% of allocated quantity)
         _currentLowWaterMark = (int)(allocatedQuantity * (double)lowWaterMarkPct);
 
-        // Redis key for campaign pool
-        _campaignPoolKey = $"fs:{campaignId}:limit";
+        // Redis key for campaign pool (Partitioned SKU pool)
+        _campaignPoolKey = $"fs:{campaignId}:redis_pool:sku:{skuId}";
 
         _logger.LogInformation(
-            "[Allocation {AllocationId}] Initialized: {AllocatedQty} items in RAM, low_water_mark={LowWaterMark}, refill_batch={RefillBatch}",
-            allocationId, allocatedQuantity, _currentLowWaterMark, refillBatchSize
+            "[Allocation {AllocationId}] Initialized: {AllocatedQty} items in RAM, low_water_mark={LowWaterMark}, refill_batch={RefillBatch}, source={PoolKey}",
+            allocationId, allocatedQuantity, _currentLowWaterMark, refillBatchSize, _campaignPoolKey
         );
     }
 
@@ -127,7 +127,7 @@ public class AdaptiveInventoryV2
     private async Task<(bool Success, string PriceType, decimal Price)> HandleDepletedAsync()
     {
         // Try campaign pool directly (bypassing local cache)
-        long remaining = await _redis.StringDecrementAsync(_campaignPoolKey);
+        long remaining = await _redis.StringDecrementAsync(_skuPoolKey);
         if (remaining >= 0)
         {
             Interlocked.Increment(ref _campaignPoolHits);
@@ -140,7 +140,7 @@ public class AdaptiveInventoryV2
         else
         {
             // Campaign sold out → restore Redis counter and try ordinary stock
-            await _redis.StringIncrementAsync(_campaignPoolKey);
+            await _redis.StringIncrementAsync(_skuPoolKey);
 
             // TODO: Check ordinary stock from database (inventory table)
             // For now, return sold out
@@ -160,7 +160,7 @@ public class AdaptiveInventoryV2
             var startTime = DateTime.UtcNow;
 
             // Try to pull refill_batch_size items from campaign pool
-            long newRemaining = await _redis.StringDecrementAsync(_campaignPoolKey, _refillBatchSize);
+            long newRemaining = await _redis.StringDecrementAsync(_skuPoolKey, _refillBatchSize);
 
             if (newRemaining >= 0)
             {
@@ -191,7 +191,7 @@ public class AdaptiveInventoryV2
             else
             {
                 // Campaign pool depleted → restore what we tried to take
-                await _redis.StringIncrementAsync(_campaignPoolKey, _refillBatchSize);
+                await _redis.StringIncrementAsync(_skuPoolKey, _refillBatchSize);
 
                 _logger.LogInformation(
                     "[Allocation {AllocationId}] Refill FAILED: Campaign pool depleted, remaining={CampaignRemaining}",
