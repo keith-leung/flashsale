@@ -1,0 +1,189 @@
+# =============================================================================
+# Flash Sale Microservices Platform - Variant Z
+# Token Pre-Allocation Architecture
+# =============================================================================
+#
+# ARCHITECTURE: Variant Z - Token Pre-Allocation with Atomic Redis Operations
+# --------------------------------------------------------------------------
+# This variant uses token pre-allocation in Redis to eliminate database
+# contention during flash sales while maintaining data integrity through
+# synchronous persistence.
+#
+# PORT ALLOCATION (Variant Z):
+# -----------------------------
+# MariaDB:  3315 (host) → 3306 (container)
+# Redis:    (internal only) → 6379 (container)
+# Python:   30017 (host) → 8000 (container)
+# Java:     8019 (host) → 8080 (container)
+# C#:       30018 (host) → 80 (container)
+# Nginx:    8448 (host) → 443 (container)
+#
+# NETWORK ARCHITECTURE:
+# ---------------------
+# - Network: 10.92.0.0/24 (isolated from other variants)
+# - Service Discovery: Docker DNS (service names)
+# - Complete isolation from Variant Y, X, and A
+# - Redis with AOF persistence for token storage
+#
+# CPU/MEMORY ALLOCATION:
+# ----------------------
+# MariaDB: 16 CPUs, 16GB RAM
+# Redis: 4 CPUs, 4GB RAM
+# Python: 8 CPUs, 4GB RAM
+# Java: 8 CPUs, 4GB RAM
+# C#: 12 CPUs, 4GB RAM
+# Nginx: 2 CPUs, 512MB RAM
+#
+# SACRED CREDENTIALS (Immutable):
+# --------------------------------
+# Database: orange315
+# User: syracuse
+# Password: Orange_315_Forever!
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PERMANENT INFRASTRUCTURE
+  # ---------------------------------------------------------------------------
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb-z
+    restart: always
+    cpus: "16.0"
+    mem_limit: 16G
+    ports:
+      - "3315:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orange315
+      MYSQL_USER: syracuse
+      MYSQL_PASSWORD: Orange_315_Forever!
+    command: --innodb-buffer-pool-size=13G --max-connections=3000 --innodb-flush-log-at-trx-commit=2
+    volumes:
+      - mariadb_z_data:/var/lib/mysql
+      - ../migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - flashsale-z-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: flash-redis-z
+    restart: always
+    cpus: "4.0"
+    mem_limit: 4G
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 3gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_z_data:/data
+    networks:
+      - flashsale-z-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: flash-nginx-z
+    restart: always
+    cpus: "2.0"
+    mem_limit: 512M
+    ports:
+      - "8448:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../ssl:/etc/ssl/nginx:ro
+    networks:
+      - flashsale-z-net
+    depends_on:
+      - mariadb
+      - redis
+      - python-service
+      - java-service
+      - csharp-service
+
+  # ---------------------------------------------------------------------------
+  # APPLICATION SERVICES (Token Pre-Allocation with Redis)
+  # ---------------------------------------------------------------------------
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: flash-python-z
+    restart: always
+    cpus: "8.0"
+    mem_limit: 4G
+    ports:
+      - "30017:8000"
+    environment:
+      # Database connection (Docker DNS)
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@mariadb:3306/orange315
+      # Redis connection (Docker DNS)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+    networks:
+      - flashsale-z-net
+    depends_on:
+      - mariadb
+      - redis
+
+  java-service:
+    build:
+      context: ./java-service
+      dockerfile: Dockerfile
+    container_name: flash-java-z
+    restart: always
+    cpus: "8.0"
+    mem_limit: 4G
+    ports:
+      - "8019:8080"
+    environment:
+      # Database connection (Docker DNS)
+      SPRING_DATASOURCE_URL: jdbc:mysql://mariadb:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: syracuse
+      SPRING_DATASOURCE_PASSWORD: Orange_315_Forever!
+      DB_HOST: mariadb
+      # Redis connection (Docker DNS)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks:
+      - flashsale-z-net
+    depends_on:
+      - mariadb
+      - redis
+
+  csharp-service:
+    build:
+      context: ./csharp-service
+      dockerfile: Dockerfile
+    container_name: flash-csharp-z
+    restart: always
+    cpus: "12.0"
+    mem_limit: 4G
+    ports:
+      - "30018:80"
+    environment:
+      # Database connection (Docker DNS)
+      ConnectionStrings__DefaultConnection: "Server=mariadb;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+      DB_HOST: mariadb
+      # Redis connection (Docker DNS)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks:
+      - flashsale-z-net
+    depends_on:
+      - mariadb
+      - redis
+
+volumes:
+  mariadb_z_data:
+    driver: local
+  redis_z_data:
+    driver: local
+
+networks:
+  flashsale-z-net:
+    driver: bridge
+    name: flashsale-z-net
+    ipam:
+      config:
+        - subnet: 10.92.0.0/24

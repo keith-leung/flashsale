@@ -1,0 +1,2 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+20260116_140213,variant_z,python,/health,health,4,10,10,22095.53,0,0,0,0,0,0,220955,0,0,0,0,0,0,0,7.27,7.27,1,0,HEALTH_BASELINE

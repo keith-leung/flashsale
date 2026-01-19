@@ -1,5 +1,25 @@
 #!/bin/bash
 # =============================================================================
+# ⛔ STOP! READ THIS BEFORE RUNNING OR EDITING ⛔
+# =============================================================================
+#
+# THIS SCRIPT IS FOR VARIANT Y (BASELINE) ONLY.
+#
+# DO NOT EDIT this script to test your new variant.
+# DO NOT RUN this script to test your new variant.
+#
+# PURPOSE:
+#   1. Validates the shared environment (Docker, Network, DB).
+#   2. Validates Variant Y (the "Control Group") is healthy.
+#
+# IF YOU ARE CREATING A NEW VARIANT (e.g., Variant B):
+#   1. Create your own script: variant-b/verify_variant_b.sh
+#   2. Copy the template: scripts/verification/template_verify_variant.sh
+#   3. Customize YOUR script, leave this one alone.
+#
+# =============================================================================
+
+# =============================================================================
 # SACRED VERIFICATION - Variant Y Golden Standard Verification
 # =============================================================================
 # This is the GOLDEN COMMAND for verifying Variant Y integrity.

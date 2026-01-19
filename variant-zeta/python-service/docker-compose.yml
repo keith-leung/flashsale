@@ -1,0 +1,59 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: flash-redis-zeta
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb-zeta
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: orange315
+      MYSQL_USER: syracuse
+      MYSQL_PASSWORD: Orange_315_Forever!
+    ports:
+      - "3316:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  python-api:
+    build: .
+    container_name: flash-python-api-zeta
+    depends_on:
+      - redis
+      - mariadb
+    ports:
+      - "30019:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@mariadb:3306/orange315
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      DEBUG: "false"
+      START_MODE: "api"
+    command: python /app/start_zeta.py
+
+  python-workers:
+    build: .
+    container_name: flash-python-workers-zeta
+    depends_on:
+      - redis
+      - mariadb
+    environment:
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@mariadb:3306/orange315
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      DEBUG: "false"
+      WORKER_COUNT: 5
+      START_MODE: "workers"
+    command: python /app/start_zeta.py
+
+volumes:
+  mariadb_data:
+  redis_data:

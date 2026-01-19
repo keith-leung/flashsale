@@ -193,10 +193,16 @@ MYSQL_PASSWORD: Orange_315_Forever!
 
 **Variant Y defines the SACRED schema. ALL variants MUST align with this schema.**
 
+**CRITICAL DEFINITION: The "SACRED VERIFICATION" Command**
+The script `SACRED_VERIFICATION.sh` is **PERMANENTLY BOUND** to Variant Y and the Host Environment.
+- **IT TESTS:** Variant Y (The Control Group) + Docker/Network/DB (The Petri Dish).
+- **IT DOES NOT TEST:** Your new variant.
+- **PROHIBITION:** You MUST NOT edit `SACRED_VERIFICATION.sh` to point to your new variant's ports or containers. Doing so destroys the baseline.
+
 **CRITICAL DISTINCTIONS:**
 - ✅ **Variant Y:** Defines SACRED (golden baseline, immutable schema)
 - ✅ **Variant X:** MUST align with SACRED schema (different implementation, same schema)
-- ✅ **Other Variants:** MUST align with SACRED schema (different implementation, same schema)
+- ✅ **Other Variants:** MUST align with SACRED schema (implementation differs, schema aligns)
 
 **Variant Y Requirements:**
 - Variant Y must remain functional at ALL times as the regression test baseline

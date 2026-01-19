@@ -1,0 +1,9 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+2026-01-14T20:43:17Z,variant_z,python,/health,health,4,10,5,16067.67,.52,.44,.72,1.26,29.01,.78,81941,0,0,0,0,0,0,0,2.13,.4260,1,N/A,INITIAL
+2026-01-14T20:43:24Z,variant_z,python,/health,health,6,20,5,26577.35,.80,.62,0.98,2.61,36.94,1.65,135527,0,0,0,0,0,0,0,3.52,.7040,2,65.00,SIGNIFICANT_GROWTH
+2026-01-14T20:43:31Z,variant_z,python,/health,health,9,40,5,29418.75,2.85,0.91,9.49,22.48,53.73,5.30,150033,0,0,0,0,0,0,0,3.90,.7800,3,10.00,SIGNIFICANT_GROWTH
+2026-01-14T20:43:39Z,variant_z,python,/health,health,13,80,5,23089.55,65.45,2.04,214.71,902.70,1030.00,180.27,146579,0,0,0,0,0,0,0,3.06,.6120,4,-21.00,MARGINAL_GROWTH
+2026-01-14T20:43:46Z,variant_z,python,/health,health,14,96,5,30510.43,6.69,1.91,24.39,42.09,79.12,10.67,155584,0,0,0,0,0,0,0,4.04,.8080,5,32.00,SIGNIFICANT_GROWTH
+2026-01-14T20:43:54Z,variant_z,python,/health,health,21,192,5,32154.41,12.26,3.67,38.93,69.03,96.01,16.06,163213,0,0,0,0,0,0,0,4.26,.8520,6,5.00,MODERATE_GROWTH
+2026-01-14T20:44:01Z,variant_z,python,/health,health,24,288,5,31541.26,16.10,5.30,46.13,81.89,100.86,19.03,160197,0,0,0,0,0,0,0,4.18,.8360,7,-1.00,MARGINAL_GROWTH
+2026-01-14T20:44:10Z,variant_z,python,/health,health,24,345,5,24078.50,83.73,6.62,262.74,984.90,1480.00,205.68,155137,0,0,0,0,0,0,0,3.19,.6380,8,-23.00,MARGINAL_GROWTH

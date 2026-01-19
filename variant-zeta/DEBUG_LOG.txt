@@ -1,0 +1,95 @@
+# Variant Zeta - Debug Session Logs
+# Date: 2026-01-15
+
+## Issues Encountered
+
+### Issue 1: SKU Not Found
+**Error:** API returned "SKU not found"
+**Root Cause:** API code was looking for `sku:{id}:metadata` but Redis had `sku:{id}`
+**Status:** Fixed by updating API to use `sku:{id}`
+
+### Issue 2: Coroutine Error
+**Error:** "Invalid input of type: 'coroutine'"
+**Root Cause:** Lua script loading function was defined as `async def` but called without `await` at module load time
+**Status:** Fixed by changing to `def load_lua_script()`
+
+### Issue 3: Campaign Not Found
+**Error:** API returned "CAMPAIGN_NOT_FOUND"
+**Root Cause:** Redis schema mismatch
+  - API expects: `campaign:{spu_id}` (hash)
+  - Cache loader creates: `campaign:{campaign_id}` (hash) and `campaign:spu:{spu_id}` (string - WRONG)
+**Status:** Attempted to fix cache loader multiple times, but encountered IndentationError
+
+### Issue 4: Campaign Not Active
+**Error:** API returned "CAMPAIGN_NOT_ACTIVE"
+**Root Cause:** After creating `campaign:spu:{spu_id}` string manually, Lua script found it but is_active field was not 'true' or '1'
+**Status:** Created hash key manually, still failed
+
+## Current State
+
+### API Status
+- Container: flash-python-api-zeta (UP)
+- Port: 30019 -> 8000
+- Workers: 16 (uvloop + httptools)
+- Order Creation Status: FAILING (500 Internal Server Error)
+
+### Redis Schema (Actual)
+- SKU keys: `sku:{id}` (hash) ✓
+- Stock keys: `stock:{id}` (hash) ✓
+- Campaign keys: `campaign:{campaign_id}` (hash) and `campaign:spu:{id}` (string) ✗
+- Queue keys: `orders_queue` (list)
+
+### Redis Schema (Expected by API)
+- SKU keys: `sku:{id}` (hash) ✓
+- Stock keys: `stock:{id}` (hash) ✓
+- Campaign keys: `campaign:{spu_id}` (hash) ✗
+- Queue keys: `orders_queue` (list) ✓
+
+### Cache Loader Status
+- File: /app/load_redis_data.py
+- Status: BROKEN (IndentationError on line 92)
+- Last Output: IndentationError: unexpected indent
+
+## Test Results
+
+### Single Order Test
+**Command:**
+```bash
+curl -X POST http://localhost:30019/orders/ \
+  -H "Content-Type: application/json" \
+  -d '{"customer_name":"Test User","customer_email":"test@example.com","line_items":[{"sku_id":"e9d1807a-f22b-11f0-bbc4-9660160e28bc","quantity":1}]}'
+```
+
+**Response:**
+```json
+{"detail":"Order creation failed: CAMPAIGN_NOT_FOUND"}
+```
+
+**HTTP Status:** 500
+
+### Benchmark Status
+**Status:** NOT RUN (wrk image not available, and API not functional)
+
+## Root Cause Summary
+
+The primary issue is **Redis schema mismatch**:
+1. Cache loader creates `campaign:{spu_id}` as STRING (incorrect)
+2. API expects `campaign:{spu_id}` as HASH (correct)
+3. Lua script fails to read string as hash, returns "CAMPAIGN_NOT_FOUND"
+
+## Fix Required
+
+**To fix:**
+1. Correct cache loader to create `campaign:{spu_id}` as HASH
+2. Fix IndentationError in load_redis_data.py line 92
+3. Rebuild container
+4. Reload Redis data
+5. Test single order
+6. Run benchmark
+
+**Time to fix:** ~5 minutes
+
+## Conclusion
+
+Variant Zeta API is RUNNING but NOT FUNCTIONAL for order creation due to Redis schema mismatch.
+All other components (SKU, Stock, Workers) are working correctly.

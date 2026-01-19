@@ -1,0 +1,12 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+20260116_141010,variant_z,python,/health,health,4,10,10,25674.14,3.41,0,0,0,0,0,256741,0,0,0,0,0,0,0,8.45,8.45,1,0,HEALTH_BASELINE
+20260116_141010,variant_z,python,/orders/,order,4,10,10,25801.3,8.44,0,0,0,0,0,258013,0,0,0,0,0,0,0,4.55,4.55,1,0,INITIAL
+20260116_141010,variant_z,python,/orders/,order,6,20,10,28211.31,2.97,0,0,0,0,0,282113,0,0,0,0,0,0,0,4.98,4.98,2,9.340653377930577,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,9,40,10,52476.21,4.73,0,0,0,0,0,524762,0,0,0,0,0,0,0,9.26,9.26,3,86.01124868005064,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,13,80,10,75020.18,12.97,0,0,0,0,0,750201,0,0,0,0,0,0,0,13.24,13.24,4,42.96036241946587,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,19,160,10,92127.89,0.9,0,0,0,0,0,921278,0,0,0,0,0,0,0,16.25,16.25,5,22.804144164943363,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,24,320,10,111446.72,1.51,0,0,0,0,0,1114467,0,0,0,0,0,0,0,19.66,19.66,6,20.969578267775375,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,24,640,15,128110.86,2.66,0,0,0,0,0,1921662,0,0,0,0,0,0,0,22.6,22.6,7,14.952562085272675,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,24,640,15,124517.77,6.17,0,0,0,0,0,1867766,0,0,0,0,0,0,0,21.97,21.97,8,-2.8046724532174685,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,24,640,15,120729.83,5.59,0,0,0,0,0,1810947,0,0,0,0,0,0,0,21.3,21.3,9,-3.042087888339152,SIGNIFICANT_GROWTH
+20260116_141010,variant_z,python,/orders/,order,26,768,15,121205.3,5.5,0,0,0,0,0,1818079,0,0,0,0,0,0,0,21.38,21.38,10,0.3938297602175048,PLATEAU_CONFIRMED

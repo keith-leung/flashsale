@@ -1,0 +1,7 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+2026-01-14T00:18:27Z,variant_z,python,/api/v1/orders,order,4,10,10,20178.54,461.36us,0,0,,0,0,203808,,,0,0,0,0,0,0,0,1,N/A,COMPLETED
+2026-01-14T00:18:43Z,variant_z,python,/api/v1/orders,order,4,20,10,21909.86,5.44ms,0,0,,0,0,221293,,,0,0,0,0,0,0,0,2,N/A,COMPLETED
+2026-01-14T00:18:59Z,variant_z,python,/api/v1/orders,order,8,40,10,22987.55,8.04ms,0,0,,0,0,230179,,,0,0,0,0,0,0,0,3,N/A,COMPLETED
+2026-01-14T00:19:16Z,variant_z,python,/api/v1/orders,order,16,80,10,25274.91,10.99ms,0,0,,0,0,254637,,,0,0,0,0,0,0,0,4,N/A,COMPLETED
+2026-01-14T00:19:32Z,variant_z,python,/api/v1/orders,order,16,100,10,21449.89,12.02ms,0,0,,0,0,216387,,,0,0,0,0,0,0,0,5,N/A,COMPLETED
+2026-01-14T00:19:49Z,variant_z,python,/api/v1/orders,order,16,150,10,25006.37,13.17ms,0,0,,0,0,251952,,,0,0,0,0,0,0,0,6,N/A,COMPLETED

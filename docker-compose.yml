@@ -1,158 +1,40 @@
-# =============================================================================
-# Flash Sale Microservices Platform - Variant Y (Baseline)
-# Docker Desktop Configuration - Stable, DNS-Based Service Discovery
-# =============================================================================
-#
-# ARCHITECTURE: Variant Y - Baseline Performance Testing
-# --------------------------------------------------------
-# This is the baseline variant for performance comparison. Each variant runs
-# in complete isolation with dedicated infrastructure.
-#
-# PORT ALLOCATION (Variant Y):
-# -----------------------------
-# MariaDB:  3307 (host) → 3306 (container)
-# Python:   8000 (host) → 8000 (container)
-# Java:     8081 (host) → 8080 (container)
-# C#:       8082 (host) → 80 (container)
-# Nginx:    8443 (host) → 443 (container)
-#
-# FUTURE VARIANTS (Reserved Ports):
-# ----------------------------------
-# Variant X: 3308, 8010, 8011, 8012, 8444
-# Variant Z: 3309, 8020, 8021, 8022, 8445
-# Variant W: 3310, 8030, 8031, 8032, 8446
-#
-# NETWORK ARCHITECTURE:
-# ---------------------
-# - Network: flashsale-y-net (Docker managed bridge)
-# - Service Discovery: Docker DNS (no static IPs)
-# - Services reference each other by name: mariadb, python-service, etc.
-# - Complete isolation from other variants
-# - Pure database implementation (no caching layer)
-#
-# CPU/MEMORY ALLOCATION:
-# ----------------------
-# Note: cpuset removed for Docker Desktop compatibility
-# CPU limits still enforced via cpus parameter
-#
-# SACRED CREDENTIALS (Immutable):
-# --------------------------------
-# Database: orange315
-# User: syracuse
-# Password: Orange_315_Forever!
-#
-# =============================================================================
-
 services:
-  # ---------------------------------------------------------------------------
-  # PERMANENT INFRASTRUCTURE
-  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: flash-redis-zeta
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+
   mariadb:
     image: mariadb:10.11
-    container_name: flash-mariadb-y
-    restart: always
-    cpus: "16.0"
-    mem_limit: 16G
-    ports:
-      - "3307:3306"
+    container_name: flash-mariadb-zeta
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: root_password
       MYSQL_DATABASE: orange315
       MYSQL_USER: syracuse
       MYSQL_PASSWORD: Orange_315_Forever!
-    command: --innodb-buffer-pool-size=13G --max-connections=3000 --innodb-flush-log-at-trx-commit=2
-    volumes:
-      - mariadb_y_data:/var/lib/mysql
-    networks:
-      - flashsale-y-net
-
-  nginx:
-    image: nginx:alpine
-    container_name: flash-nginx-y
-    restart: always
-    cpus: "2.0"
-    mem_limit: 512M
     ports:
-      - "8443:443"
+      - "3316:3306"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/ssl/nginx:ro
-    networks:
-      - flashsale-y-net
-    depends_on:
-      - mariadb
-      - python-service
-      - java-service
-      - csharp-service
+      - mariadb_data:/var/lib/mysql
 
-  # ---------------------------------------------------------------------------
-  # APPLICATION SERVICES (Pure Database - No Cache Layer)
-  # ---------------------------------------------------------------------------
   python-service:
-    build:
-      context: ./python-service
-      dockerfile: Dockerfile
-    container_name: flash-python-y
-    restart: always
-    cpus: "8.0"
-    mem_limit: 4G
+    build: .
+    container_name: flash-python-zeta
+    depends_on:
+      - redis
+      - mariadb
     ports:
-      - "8000:8000"
+      - "30019:8000"
     environment:
-      # Using Docker DNS service names (not IPs)
       DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@mariadb:3306/orange315
-    networks:
-      - flashsale-y-net
-    depends_on:
-      - mariadb
-
-  java-service:
-    build:
-      context: ./java-service
-      dockerfile: Dockerfile
-    container_name: flash-java-y
-    restart: always
-    cpus: "8.0"
-    mem_limit: 4G
-    ports:
-      - "8081:8080"
-    environment:
-      # Using Docker DNS service names (not IPs)
-      SPRING_DATASOURCE_URL: jdbc:mysql://mariadb:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      SPRING_DATASOURCE_USERNAME: syracuse
-      SPRING_DATASOURCE_PASSWORD: Orange_315_Forever!
-      DB_HOST: mariadb
-    networks:
-      - flashsale-y-net
-    depends_on:
-      - mariadb
-
-  csharp-service:
-    build:
-      context: ./csharp-service
-      dockerfile: Dockerfile
-    container_name: flash-csharp-y
-    restart: always
-    cpus: "12.0"
-    mem_limit: 4G
-    ports:
-      - "8082:80"
-    environment:
-      # Using Docker DNS service names (not IPs)
-      ConnectionStrings__DefaultConnection: "Server=mariadb;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;"
-      ASPNETCORE_ENVIRONMENT: Development
-      DOTNET_USE_POLLING_FILE_WATCHER: "true"
-      DB_HOST: mariadb
-    networks:
-      - flashsale-y-net
-    depends_on:
-      - mariadb
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      DEBUG: "false"
+      WORKER_COUNT: 5
+      BATCH_SIZE: 1000
 
 volumes:
-  mariadb_y_data:
-    driver: local
-
-networks:
-  flashsale-y-net:
-    driver: bridge
-    name: flashsale-y-net
+  mariadb_data:

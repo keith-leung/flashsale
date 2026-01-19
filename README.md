@@ -311,7 +311,7 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 ## 4. Complete Performance Comparison - All Variants
 
 **Test Strategy:** Mixed (Fixed sweep + Adaptive plateau detection)
-**Latest Test:** 2026-01-05
+**Latest Test:** 2026-01-14 (Variant Z added)
 **Test Condition:** Sufficient inventory pre-loaded (50M items, no refills during test)
 
 ### Complete Performance Table
@@ -331,6 +331,10 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 | A       | /health | Java    | c=300       | -         | 179,740 req/s   |
 | A       | /health | C#      | c=300       | 19.62ms   | 292,930 req/s   |
 | A       | /health | Nginx   | c=100       | 7.54ms    | 12,600 req/s    |
+| Z       | /health | Python  | c=115       | 2.27ms    | 33,379 req/s    |
+| Z       | /health | Java    | c=460       | 1.95ms    | 208,069 req/s   |
+| Z       | /health | C#      | c=768       | 1.78ms    | 386,453 req/s   |
+| Z       | /health | Nginx   | c=48        | 1.89ms    | 12,283 req/s    |
 | **FLASH SALE ORDERS** |
 | Y       | /orders | Python  | c=300       | 213.04ms  | 1,390 req/s ✓   |
 | Y       | /orders | Java    | c=200       | 21.90ms   | 8,718 req/s ✓   |
@@ -344,6 +348,27 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 | A       | /orders | Java    | c=50        | 3.43ms    | 14,950 req/s    |
 | A       | /orders | C#      | c=400       | 4.24ms    | **93,876 req/s** 👑 |
 | A       | /orders | Nginx   | c=100       | 11.09ms   | 9,049 req/s     |
+| Z       | /orders | Python  | c=10        | 15.91ms   | 502 req/s ❌    |
+| Z       | /orders | Java    | -           | -         | ❌ DISQUALIFIED |
+| Z       | /orders | C#      | -           | -         | ❌ DISQUALIFIED |
+
+### ❌ Variant Z - DISQUALIFIED (Design Failure)
+
+**Primary Disqualification Reason: Architecture performs WORSE than baseline**
+
+| Metric | Python Variant Y (Baseline) | Python Variant Z | Result |
+|--------|----------------------------|------------------|--------|
+| Orders | 1,390 req/s | 502 req/s | **2.8x SLOWER** |
+
+The token pre-allocation architecture with synchronous database persistence is fundamentally slower than Variant Y's pure database transaction approach. Since the Python implementation (the only working service) performs **2.8x worse than baseline**, there is no hope that fixing Java/C# bugs would result in a competitive variant.
+
+**Design cannot be changed. Variant Z is disqualified.**
+
+| Service | Status | Notes |
+|---------|--------|-------|
+| Python  | ❌ DISQUALIFIED | 502 req/s - slower than baseline (1,390 req/s) |
+| Java    | ❌ DISQUALIFIED | Implementation bug (NullPointerException) - moot point |
+| C#      | ❌ DISQUALIFIED | Implementation bug (MySQL connection) - moot point |
 
 ### Performance Rankings
 
@@ -360,6 +385,7 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 10. Python Variant X - 1,528 req/s @ c=20
 11. Python Variant Y - 1,390 req/s @ c=300
 12. Nginx Variant X - 1,387 req/s @ c=200
+13. ~~Variant Z~~ - **DISQUALIFIED** (design failure - slower than baseline)
 
 ---
 
@@ -443,7 +469,20 @@ grep ",order," benchmark_results/variant_X_raw_*.csv | awk -F',' '{print $3, $9}
 
 ---
 
-## 6. Quick Start (5 Minutes)
+## 5. Environment & Quick Start
+
+### Environment Specification
+
+**Hardware (The Rig):**
+- **CPU:** Intel Core Ultra 9 275HX (24 Cores / 24 Threads)
+- **RAM:** 32GB+ allocated to WSL2
+- **Platform:** Windows 11 Host + WSL2 (Ubuntu) + Docker Desktop
+
+**Operational Constraints:**
+- **Execution Context:** All scripts and commands run inside the WSL2 Linux terminal.
+- **Docker:** Containers run via Docker Desktop for Windows (integrated via WSL2).
+- **Network:** Be aware of WSL2 networking nuances (localhost bridging).
+- **Tooling:** Use standard Linux CLI tools (`curl`, `grep`, `awk`, `sed`) for debugging and implementation.
 
 ### Prerequisites
 - Docker Desktop installed
@@ -764,7 +803,28 @@ bash verify_variant_{your_letter}.sh
 
 ---
 
-## 10. Version History & Notes
+## 11. Troubleshooting & Common Mistakes
+
+### ❌ Mistake 1: "I modified SACRED_VERIFICATION.sh to test my variant"
+**STOP.** You are breaking the baseline.
+- `SACRED_VERIFICATION.sh` is the **Control Group** test. It must always test Variant Y.
+- **Fix:** Revert your changes. Create `variant-{letter}/verify_variant_{letter}.sh` instead.
+
+### ❌ Mistake 2: "I can't find where to start"
+**Solution:**
+1. Copy `python-service/` (Variant Y) to `variant-b/python-service/`.
+2. Copy `scripts/verification/template_verify_variant.sh` to `variant-b/verify_variant_b.sh`.
+3. Modify your new service code to implement your innovation.
+
+### ❌ Mistake 3: "My variant is slow"
+**Checklist:**
+- Are you logging to disk on every request? (Disable logging in hot path)
+- Are you using synchronous DB writes? (Consider async)
+- Did you increase thread/worker counts? (You have 24 cores!)
+
+---
+
+## 12. Version History & Notes
 
 ### Version 2026-01-12: Variant A Record Performance
 

@@ -1,0 +1,39 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: flash-redis-zeta
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb-zeta
+    environment:
+      MYSQL_ROOT_PASSWORD: Orange_315_Forever!
+      MYSQL_DATABASE: orange315
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+
+  python-api:
+    build: ./python-service
+    container_name: flash-python-api-zeta
+    depends_on:
+      - redis
+      - mariadb
+    ports:
+      - "30019:8000"
+    command: ["python3", "start_services.py"]
+    environment:
+      - WORKER_MODE=background
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./python-service:/app
+
+volumes:
+  redis-data:
+  mariadb-data:
