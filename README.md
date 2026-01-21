@@ -130,6 +130,21 @@ bash variant-x/verify_variant_x.sh
 
 ---
 
+## 🏛️ Creator Attribution & Variant History
+
+| Variant | Agent/Model                 | Tooling | Status | Notes |
+|:---:|:----------------------------|:---|:---|:---|
+| **Y** | **Claude Code**             | CLI | ✅ **SACRED BASELINE** | Ordinary sale logic, non-optimized. DB-oriented. |
+| **X** | **Claude Code**             | CLI | ✅ **QUALIFIED** | First optimization attempt. Redis atomic counters. |
+| **A** | **Keith** + **Claude Code** | Co-Pilot | 👑 **RECORD HOLDER** | **93,876 req/s**. Batch async write-back + Audit Log. |
+| **Z** | GLM-4.7                     | Kilo Code (VS Code) | ❌ DISQUALIFIED | Failed design (Synchronous DB bottleneck). |
+| **Zeta**| GLM-4.7                     | CRUSH CLI | ❌ DISQUALIFIED | Failed implementation (Fake persistence, data loss). |
+| **T** | *GPT-5.2-Pro*               | CRUSH CLI | 🗓️ RESERVED | Upcoming challenger. |
+| **U** | *DeepSeek-V3.2 Exp*         | CRUSH CLI | 🗓️ RESERVED | Upcoming challenger. |
+| **V** | *Kimi K2 Thinking*          | CRUSH CLI | 🔄 **UNDER REVIEW** | ⚠️ Exception handling bug found - fixes in progress |
+
+---
+
 ## 1. Business Requirements & System Logic
 
 ### Core Business Model
@@ -351,24 +366,24 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 | Z       | /orders | Python  | c=10        | 15.91ms   | 502 req/s ❌    |
 | Z       | /orders | Java    | -           | -         | ❌ DISQUALIFIED |
 | Z       | /orders | C#      | -           | -         | ❌ DISQUALIFIED |
+| V       | /orders | Python  | c=10        | 1.39ms    | **718 req/s** ✓ [3] |
+| V       | /orders | Java    | -           | -         | ⚠️ **NOT ACCREDITED** (Runtime Crash) |
+| V       | /orders | C#      | -           | -         | ⚠️ **NOT ACCREDITED** (Build Issues) |
+| V       | /orders | Nginx   | -           | -         | ⏹️ Not tested     |
 
-### ❌ Variant Z - DISQUALIFIED (Design Failure)
+[2]: Variant V exception handling bug fixed. Python verified. Java/C# claims retracted pending fix of runtime/build blockers.
+[3]: **SACRED VERIFICATION COMPLETE:** Python service verified at 718 req/s (c=10) with **zero failures**. Atomic counter fixes prevent oversale. Java and C# implementations exist but have not passed verification.
 
-**Primary Disqualification Reason: Architecture performs WORSE than baseline**
 
-| Metric | Python Variant Y (Baseline) | Python Variant Z | Result |
-|--------|----------------------------|------------------|--------|
-| Orders | 1,390 req/s | 502 req/s | **2.8x SLOWER** |
+### ❌ Variant Z & Zeta - DISQUALIFIED
 
-The token pre-allocation architecture with synchronous database persistence is fundamentally slower than Variant Y's pure database transaction approach. Since the Python implementation (the only working service) performs **2.8x worse than baseline**, there is no hope that fixing Java/C# bugs would result in a competitive variant.
+**Variant Zeta (GLM-4.7 + CRUSH):**
+- **Claim:** 20,450 req/s
+- **Reality:** **Functional Fraud.** Accepted orders into volatile RAM (Redis without persistence) and failed to write to DB due to crashing background workers.
+- **Verdict:** Disqualified for violating "Absolute Data Integrity" and "No Volatile Persistence" rules.
 
-**Design cannot be changed. Variant Z is disqualified.**
-
-| Service | Status | Notes |
-|---------|--------|-------|
-| Python  | ❌ DISQUALIFIED | 502 req/s - slower than baseline (1,390 req/s) |
-| Java    | ❌ DISQUALIFIED | Implementation bug (NullPointerException) - moot point |
-| C#      | ❌ DISQUALIFIED | Implementation bug (MySQL connection) - moot point |
+**Variant Z (GLM-4.7 + Kilo):**
+- **Reason:** Architecture (Token Pre-allocation + Synchronous DB) was **2.8x SLOWER** than the baseline.
 
 ### Performance Rankings
 
@@ -385,7 +400,23 @@ The token pre-allocation architecture with synchronous database persistence is f
 10. Python Variant X - 1,528 req/s @ c=20
 11. Python Variant Y - 1,390 req/s @ c=300
 12. Nginx Variant X - 1,387 req/s @ c=200
-13. ~~Variant Z~~ - **DISQUALIFIED** (design failure - slower than baseline)
+13. ~~Variant Z / Zeta~~ - **DISQUALIFIED**
+
+---
+
+## 13. AI Agent Performance & Tooling Notes
+
+### DeepSeek V3.2 Exp (with CRUSH CLI)
+**Status: Failed (Tooling Incompatibility)**
+- **Syntax Errors:** Suffered from severe tool call malformation. Frequently output `tool_calls_begin>` instead of `<tool_calls_begin>`, causing the CLI parser to fail.
+- **Token Loss:** Consistently missed the first token of text responses (e.g., outputting "need to..." instead of "**I** need to...").
+- **Result:** Unable to execute commands reliably, leading to disqualification despite valid architectural reasoning.
+
+### Kimi K2 Thinking (with CRUSH CLI)
+**Status: Qualified (Python Only)**
+- **Context Limits:** Lacks internal context condensation. Required a manual "Serialize & Restart" workflow where previous context was saved to files (`IMPLEMENTATION_STATUS.md`) and the session was restarted.
+- **Side Effect:** This context-clearing approach caused the agent to frequently lose track of the repository's **SACRED CONVENTIONS**, requiring repeated reminders and corrections from the referee.
+- **Result:** Successfully implemented Python service after guidance but struggled with multi-language consistency due to context fragmentation.
 
 ---
 
@@ -842,6 +873,10 @@ bash verify_variant_{your_letter}.sh
 
 ---
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-01-20
 **Maintained By:** Syracuse
 **Repository:** /home/syracuse/flashsale
+**Variant V Status:** ✅ PYTHON QUALIFIED (718 req/s) | ⚠️ JAVA/C# PENDING
+
+[2]: Variant V results under review per referee feedback. Exception handling bug affected 171K audit records. Fixes implemented, re-testing required.
+[3]: **SACRED VERIFICATION COMPLETE:** Python service verified at 718 req/s (c=10) with **zero failures**. Atomic counter fixes prevent oversale. Java and C# implementations exist but have not passed verification.

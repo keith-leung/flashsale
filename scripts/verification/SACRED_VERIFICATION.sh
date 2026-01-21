@@ -56,10 +56,28 @@
 
 set -e
 
+# Hardcoded Sacred Configuration
+SACRED_ROOT="/home/syracuse/flashsale"
+EXPECTED_VARIANT="variant_y"
+
+# Strict Directory Enforcement
+# Usage: bash SACRED_VERIFICATION.sh [DIRECTORY] [DURATION]
+PASSED_DIR="${1:-$SACRED_ROOT}"
+DURATION="${2:-10}"
+
+if [ "$PASSED_DIR" != "$SACRED_ROOT" ]; then
+    echo -e "\033[0;31mERROR: SACRED VERIFICATION is locked to Variant Y baseline.\033[0m"
+    echo -e "\033[0;31mTarget directory MUST be: $SACRED_ROOT\033[0m"
+    echo -e "\033[0;31mReceived: $PASSED_DIR\033[0m"
+    exit 1
+fi
+
+# Ensure we are actually IN that directory
+cd "$SACRED_ROOT"
+
 # Configuration
-DURATION="${1:-10}"  # Default 10s, can be overridden
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULTS_DIR="./benchmark_results"
+RESULTS_DIR="${SACRED_ROOT}/benchmark_results"
 CSV_FILE="${RESULTS_DIR}/variant_Y_raw_${TIMESTAMP}.csv"
 
 # Color output
