@@ -1,0 +1,92 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb-u
+    ports:
+      - "3314:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orange315
+      MYSQL_USER: syracuse
+      MYSQL_PASSWORD: Orange_315_Forever!
+    command: --innodb-buffer-pool-size=1G --max-connections=3000
+    networks:
+      variant-u-net:
+        ipv4_address: 10.91.0.2
+    restart: always
+
+  redis:
+    image: redis:alpine
+    container_name: flash-redis-u
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 2gb --maxmemory-policy allkeys-lru
+    networks:
+      variant-u-net:
+        ipv4_address: 10.91.0.3
+    restart: always
+
+  python-service:
+    build: ./python-service
+    container_name: flash-python-u
+    ports:
+      - "30015:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://syracuse:Orange_315_Forever!@10.91.0.2:3306/orange315
+      REDIS_URL: redis://10.91.0.3:6379/0
+      SERVICE_NAME: variant-u-python
+    command: sh -c "sleep 20 && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 16 --backlog 2048 --limit-concurrency 10000"
+    networks:
+      variant-u-net:
+        ipv4_address: 10.91.0.5
+    restart: always
+
+  java-service:
+    image: placeholder-java-u
+    container_name: flash-java-u
+    ports:
+      - "8018:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://10.91.0.2:3306/orange315?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: syracuse
+      SPRING_DATASOURCE_PASSWORD: "Orange_315_Forever!"
+      SPRING_DATA_REDIS_HOST: 10.91.0.3
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_PROFILES_ACTIVE: variant-u
+    networks:
+      variant-u-net:
+        ipv4_address: 10.91.0.6
+    restart: always
+
+  csharp-service:
+    image: placeholder-csharp-u
+    container_name: flash-csharp-u
+    ports:
+      - "30016:80"
+    environment:
+      ConnectionStrings__DefaultConnection: Server=10.91.0.2;Port=3306;Database=orange315;User=syracuse;Password=Orange_315_Forever!;
+      Redis__Host: 10.91.0.3
+      Redis__Port: 6379
+    networks:
+      variant-u-net:
+        ipv4_address: 10.91.0.7
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: flash-nginx-u
+    ports:
+      - "8447:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl/nginx.crt:/etc/nginx/ssl/nginx.crt:ro
+      - ./ssl/nginx.key:/etc/nginx/ssl/nginx.key:ro
+    networks:
+      variant-u-net:
+        ipv4_address: 10.91.0.4
+    restart: always
+
+networks:
+  variant-u-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.91.0.0/24

@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: flashsale-api-v
+  datasource:
+    url: jdbc:mariadb://10.92.0.2:3306/orange315
+    username: syracuse
+    password: Orange_315_Forever!
+    driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.MariaDBDialect
+
+server:
+  port: 8018
+  servlet:
+    context-path: /
+
+redis:
+  nodes:
+    - redis://10.92.0.3:6379
+    - redis://10.92.0.4:6379
+    - redis://10.92.0.5:6379
+
+logging:
+  level:
+    com.flashsale: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

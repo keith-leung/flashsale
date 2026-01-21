@@ -1,0 +1,135 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: flash-mariadb-v
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orange315
+      MYSQL_USER: syracuse
+      MYSQL_PASSWORD: Orange_315_Forever!
+    ports:
+      - "3315:3306"  # Host port: 3315 (variant V)
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.2
+    volumes:
+      - mariadb-v-data:/var/lib/mysql
+    command: --innodb-buffer-pool-size=16G --innodb-log-file-size=2G --innodb-flush-log-at-trx-commit=2
+    restart: always
+
+  redis-node1:
+    image: redis:7-alpine
+    container_name: flash-redis1-v
+    ports:
+      - "8001:6379"
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.3
+    volumes:
+      - redis1-v-data:/data
+    restart: always
+
+  redis-node2:
+    image: redis:7-alpine
+    container_name: flash-redis2-v
+    ports:
+      - "8002:6379"
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.4
+    volumes:
+      - redis2-v-data:/data
+    restart: always
+
+  redis-node3:
+    image: redis:7-alpine
+    container_name: flash-redis3-v
+    ports:
+      - "8003:6379"
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.5
+    volumes:
+      - redis3-v-data:/data
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: flash-nginx-v
+    ports:
+      - "8447:80"  # Host port: 8447 (variant V)
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.6
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: always
+    depends_on:
+      - python
+      - java
+      - csharp
+
+  python:
+    build: ./python-service
+    container_name: flash-python-v
+    ports:
+      - "30017:8000"  # Host port: 30017 (variant V)
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.7
+    environment:
+      DATABASE_URL: mysql://syracuse:Orange_315_Forever!@10.92.0.2:3306/orange315
+      REDIS_NODE1_URL: redis://10.92.0.3:6379
+      REDIS_NODE2_URL: redis://10.92.0.4:6379
+      REDIS_NODE3_URL: redis://10.92.0.5:6379
+    depends_on:
+      - mariadb
+      - redis-node1
+      - redis-node2
+      - redis-node3
+    restart: always
+
+  java:
+    build: ./java-service
+    container_name: flash-java-v
+    ports:
+      - "8018:8018"  # Host port: 8018 (variant V)
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.8
+    restart: always
+    depends_on:
+      - mariadb
+      - redis-node1
+      - redis-node2
+      - redis-node3
+
+  csharp:
+    build: ./csharp-service
+    container_name: flash-csharp-v
+    ports:
+      - "30016:30016"  # Host port: 30016 (variant V)
+    networks:
+      variant-v-net:
+        ipv4_address: 10.92.0.9
+    restart: always
+    depends_on:
+      - mariadb
+      - redis-node1
+      - redis-node2
+      - redis-node3
+
+networks:
+  variant-v-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.92.0.0/24  # Variant V network (10.92.x.x)
+
+volumes:
+  mariadb-v-data:
+  redis1-v-data:
+  redis2-v-data:
+  redis3-v-data:

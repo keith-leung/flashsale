@@ -1,0 +1,9 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+20260119_224601,variant_y,python,/health,health,4,10,10,13673.08,1.50,1.81,,,,3.27,136730.80,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224611,variant_y,java,/health,health,4,10,10,33757.57,2.88,3.84,,,,11.61,337575.70,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224621,variant_y,csharp,/health,health,4,10,10,35552.25,230.05us,5.36,,,,150.99us,355522.50,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224631,variant_y,nginx,/health,health,4,10,10,10141.46,0.88,1.68,,,,1.70,101414.60,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224642,variant_y,python,/api/v1/orders,order,4,10,10,2977.35,3.62,491.38KB,,,,7.50,29773.50,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224652,variant_y,java,/api/v1/orders,order,4,10,10,6239.75,5.37,2.67,,,,13.06,62397.50,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224702,variant_y,csharp,/api/v1/orders,order,4,10,10,5303.07,4.71,828.60KB,,,,24.02,53030.70,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260119_224712,variant_y,nginx,/api/v1/orders,order,4,10,10,3751.89,2.85,1.05,,,,7.67,37518.90,0,0,0,0,0,0,0,,,1,0,INITIAL
