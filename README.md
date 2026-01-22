@@ -139,9 +139,8 @@ bash variant-x/verify_variant_x.sh
 | **A** | **Keith** + **Claude Code** | Co-Pilot | 👑 **RECORD HOLDER** | **93,876 req/s**. Batch async write-back + Audit Log. |
 | **Z** | GLM-4.7                     | Kilo Code (VS Code) | ❌ DISQUALIFIED | Failed design (Synchronous DB bottleneck). |
 | **Zeta**| GLM-4.7                     | CRUSH CLI | ❌ DISQUALIFIED | Failed implementation (Fake persistence, data loss). |
-| **T** | *GPT-5.2-Pro*               | CRUSH CLI | 🗓️ RESERVED | Upcoming challenger. |
-| **U** | *DeepSeek-V3.2 Exp*         | CRUSH CLI | 🗓️ RESERVED | Upcoming challenger. |
-| **V** | *Kimi K2 Thinking*          | CRUSH CLI | 🔄 **UNDER REVIEW** | ⚠️ Exception handling bug found - fixes in progress |
+| V       | *Kimi K2 Thinking*          | CRUSH CLI | 🔄 **UNDER REVIEW** | ⚠️ Exception handling bug found - fixes in progress |
+| **T**   | **GPT-5.2-Pro**             | Kilo Code | 🗓️ **DESIGN ONLY** | **A- (Excellent)**. Approved architecture, but implementation halted. |
 
 ---
 
@@ -873,7 +872,23 @@ bash verify_variant_{your_letter}.sh
 
 ---
 
-**Last Updated:** 2026-01-20
+## 14. Variant T (GPT-5.2-Pro) Status Note
+
+**Status:** Implementation Halted (Design Qualified)
+
+**Why Implementation Was Stopped:**
+1.  **Cost Prohibitive:** The inference cost for GPT-5.2-Pro to generate and debug the full multi-language implementation was deemed excessive for this benchmark.
+2.  **Latency:** The model's "thinking" and generation speed was too slow for an interactive debugging loop.
+3.  **Tooling Incompatibility:** Encountered friction with CRUSH CLI and VS Code plugins (e.g., Kilo Code), leading to context loss and tool call failures similar to other high-reasoning models.
+
+**Expected Performance (Theoretical):**
+*   **Ranking:** **Runner-up (2nd Place)**.
+*   **Throughput:** Estimated **~110,000 - 130,000 req/s** (Total) / **~1,000 req/s** (Valid Orders).
+*   **Architecture:** The "Redis Gate" design is superior for system stability (rejecting 99% of load in memory) but the synchronous database write for successful orders makes it slower than **Variant A** for order ingestion. It remains the "Safest" high-performance design.
+
+---
+
+**Last Updated:** 2026-01-22
 **Maintained By:** Syracuse
 **Repository:** /home/syracuse/flashsale
 **Variant V Status:** ✅ PYTHON QUALIFIED (718 req/s) | ⚠️ JAVA/C# PENDING

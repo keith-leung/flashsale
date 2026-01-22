@@ -725,3 +725,5 @@ testdata/
 # Documentation build output
 docs/build/
 docs/dist/
+.aider*
+/.crush.json
