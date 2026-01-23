@@ -121,7 +121,10 @@ Seven LLM/agent combinations attempted this implementation. The pattern was cons
 | | | | Java | — | — | ❌ DISQUALIFIED |
 | | | | C# | — | — | ❌ DISQUALIFIED |
 | **Zeta** | GLM-4.7 | CRUSH CLI | All | — | — | ❌ Fake persistence, data loss |
+| **G** | Gemini | Gemini CLI | All | — | — | ❌ Dead loop in tool calls |
 | **T** | GPT-5.2-Pro | Kilo Code | Design | ~110K est. | — | 🗓️ Budget halted |
+
+> **Note on GLM-4.7**: Variant **Z** and **Zeta** represent the same "racer" (GLM-4.7) using different "cars" (tools). Variant Z struggled with VS Code plugin constraints, so Variant Zeta was commissioned as a "makeup run" using the more robust CRUSH CLI. Despite the upgraded tooling, it ultimately failed due to architectural hallucinations (fake persistence).
 
 ### Key Observations
 
@@ -143,13 +146,16 @@ Seven LLM/agent combinations attempted this implementation. The pattern was cons
 ### What the Results Tell Us
 
 **1. Native tooling wins over API wrappers**
+Claude Code (Anthropic's native CLI) delivered working code reliably. Third-party wrappers or non-optimized pairings suffered from:
+- **Tool call loops**: The Gemini CLI entered infinite cycles/dead loops during implementation, preventing completion despite the model's intelligence.
+- **Native Synergy**: Native pairings (Claude Code + Claude) significantly outperform third-party agent wrappers (e.g., OpenRouter-based setups).
 
-Claude Code (Anthropic's native CLI) delivered working code reliably. Third-party wrappers using OpenRouter/OpenAI-compatible APIs suffered from:
-- Tool call token malformation (DeepSeek V3.2 outputting `tool_calls_begin>` instead of `<tool_calls_begin>`)
-- Gemini CLI cycling/looping dead in tool calls
-- No successful context condensation in most wrappers
+**2. Gemini as the "Technical Referee"**
+While Gemini failed to *implement* the repo via its CLI, it proved indispensable as a **Code Referee**.
+- **Context is King**: Leveraging its 2M+ context window, Gemini was used to verify the entire codebase across all variants.
+- **Hallucination Detection**: It successfully identified when other LLMs were "lying" about implementation details or violating SACRED protocols, providing the human architect with a high-level integrity check that other models couldn't match.
 
-**2. Context retention is the bottleneck**
+**3. Context retention is the bottleneck**
 
 Long-context models still forget project conventions after context condensation. This causes:
 - **Regression bugs**: Fixing one issue reintroduces a previously-solved problem
