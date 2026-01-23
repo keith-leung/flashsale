@@ -1,897 +1,417 @@
-# Flashsale Benchmark Testing Repository
+# 🇺🇸 English | [🇯🇵 日本語](README.ja.md)
 
-> **For New Agents:** Start here. This README contains everything you need to understand, run, and record benchmark tests.
+# Flash Sale Benchmark Repository
 
----
+A high-concurrency e-commerce order processing system designed to handle **100,000 requests per second** with zero oversale and complete data integrity. This repository serves two purposes:
 
-## ⚠️ CRITICAL REQUIREMENT - READ THIS FIRST
-
-**MANDATORY FOR ALL AGENTS (Claude, Gemini, or ANY AI):**
-
-**BEFORE taking ANY action in this repository, you MUST:**
-
-1. **READ** `versions/CONVENTIONS.md` in its entirety
-2. **UNDERSTAND** all SACRED policies, especially:
-   - Policy 0: Syracuse University credentials (immutable)
-   - Policy 1: Variant Y defines SACRED schema (all variants align)
-   - Policy 4: SACRED VERIFICATION is the environmental unit test
-   - Policy 7: API backward compatibility (`/api/v1/orders` is universal)
-3. **VERIFY** you understand the intelligent routing architecture
-4. **CONFIRM** you understand that SACRED VERIFICATION tests the ENTIRE REPOSITORY ENVIRONMENT
-5. **KNOW** the mandatory workflow: Change → SACRED VERIFICATION → Variant verification
-
-**Why This Matters:**
-- Violating conventions can break the golden baseline (Variant Y)
-- Using wrong endpoints invalidates benchmark comparisons
-- Skipping verification wastes hours debugging preventable issues
-
-**Proof of Understanding:**
-- Can you explain why `/api/v1/flash-sale-campaigns/{id}/orders` is FORBIDDEN?
-- Do you know what Syracuse credentials to use for ALL variants?
-- Can you describe how backend intelligent routing works?
-- **Can you explain why SACRED VERIFICATION must run FIRST when changing ANY variant?**
-
-If you cannot answer these questions, **STOP** and read CONVENTIONS.md now.
+1. **For human readers** (hiring managers, engineers): Understanding the architecture, performance findings, and AI agent evaluation methodology
+2. **For LLM/AI systems** (training, architecture reference): This repository was built partly to provide training/fine-tuning material for models like **Grok** (xAI, my previous employer). See `README.agent-instructions.md` for detailed implementation conventions, SACRED verification protocols, and step-by-step variant creation guides
 
 ---
 
-## ⛔ CRITICAL: Variant Implementation Intellectual Property
+## Author & Engineering Insights
 
-**If you are implementing a NEW variant (B, C, D, etc.), you are STRICTLY FORBIDDEN from:**
+**Keith (Dawen) L** — [LinkedIn](https://www.linkedin.com/in/keith-dliang02/)
 
-❌ Reading `/variant-x/` directory and all subdirectories
-❌ Reading `/variant-a/` directory and all subdirectories
-❌ Reading any other `/variant-*/` directories
-❌ Studying implementation code from other variants
-❌ Reading architecture documentation from other variants
-❌ Copying or adapting solutions from other variants
+**I'm actively looking for new opportunities in all countries. Please reach out via LinkedIn. **
 
-**You MAY ONLY read:**
+### Why I Built This
 
-✅ This README.md file (root directory)
-✅ `versions/CONVENTIONS.md` (schema and API contracts)
-✅ Variant Y services (Root-Level): `python-service/`, `java-service/`, `csharp-service/`
-✅ Database schema files (e.g., `migrations/001_add_flash_sale_campaigns.sql`)
-✅ Performance numbers (no implementation details)
+Nowadays enterprises embrace agentic programming and "vibe coding" as cost-cutting measures—replacing engineers with AI agents. But **can current LLMs truly handle production-grade distributed systems in complex enterprise environments** with both explicit knowledge (documented APIs) and implicit knowledge (team conventions, tribal wisdom)?
 
-**WHY THIS RESTRICTION EXISTS:**
+The answer: **no, not independently.** They need human architectural judgment, especially around consistency vs. availability trade-offs.
 
-Each variant represents original architectural research. The purpose of this repository is to compare DIFFERENT approaches to the same problem. If you copy another variant's architecture, you defeat the entire purpose of the comparison.
+### What I Learned Building This
 
-**Your variant's performance gains MUST come from YOUR architectural innovations, not from copying someone else's work.**
+1. **Framework ceilings are real** — You can't optimize your way past what the HTTP stack allows. Measure `/health` first.
 
-If caught violating this restriction, your variant will be rejected.
+2. **Batch everything under contention** — Per-request DB transactions create a bottleneck. Move atomicity to in-memory (Redis) and batch the persistence.
+
+3. **AI agents need explicit conventions** — Implicit knowledge gets lost in context condensation. Write it down, make it mandatory reading.
+
+4. **Human-AI collaboration outperforms either alone** — Variant A (Keith + Claude Code) beat pure-AI implementations.
+
+5. **Native tooling > API wrappers** — Claude Code's native integration avoided the token malformation and tool call failures that plagued OpenRouter-based setups.
+
+6. **Python first, then derive** — LLMs are trained primarily on Python. Every variant got Python working first; Java and C# followed. Some agents (Kimi K2 Thinking) never made it past Python.
+
+### Architectural Blind Spots Observed in AI Agents
+
+While implementing variants, I noticed several patterns where AI coding agents produced **functionally correct** but **operationally suboptimal** code:
+
+1. **Resource allocation**: Variant Y (Claude Code baseline) allocated 1 CPU core to Nginx but 4 cores to each backend—creating a funnel bottleneck. A human SRE would immediately recognize this as an anti-pattern.
+
+2. **Connection pooling**: Initial implementations lacked `keepalive` directives in Nginx upstream blocks, causing unnecessary TCP handshake overhead.
+
+3. **Index optimization**: Database queries were correct but missing composite indexes, causing full table scans under load.
+
+4. **Logging verbosity**: Default INFO-level logging in production configuration, adding I/O overhead during benchmarks.
+
+**The pattern**: AI agents excel at implementing business logic but struggle with **operational concerns** that experienced engineers internalize through years of production incidents.
 
 ---
 
-## 🔥 CRITICAL METHODOLOGY - SACRED VERIFICATION IS THE UNIT TEST
+## What This Project Is
 
-**BEFORE making changes to ANY variant, you MUST understand this:**
+This is a **flash sale benchmark** — 100,000 order requests in 1 second, zero oversale, no 503 errors. I built it to answer a practical question: *how do different AI coding agents perform when tasked with implementing the same high-concurrency system?*
 
-### SACRED VERIFICATION = Repository-Wide Environmental Unit Test
+The system implements a realistic flash sale scenario where:
+- A campaign has a **total sale limit** at the SPU (product) level (e.g., 1,000 iPhones)
+- Multiple SKUs (variants like colors/sizes) share that pool
+- 100,000 concurrent users try to purchase in the first second
+- **Oversale is unacceptable** (1,001 orders on a 1,000 limit = failure); minor inventory stranding (e.g., 995 orders) is acceptable for a benchmark
 
+---
+
+## Why /health Benchmarks Matter
+
+Every variant includes a `/health` endpoint benchmark. This isn't just a sanity check — it establishes the **framework ceiling**. Your order processing throughput cannot exceed what the bare HTTP stack can handle.
+
+| Service | /health Throughput | /orders Throughput | Efficiency |
+|---------|-------------------|-------------------|------------|
+| C# (ASP.NET Core) | 358,676 req/s | 93,876 req/s | 26% |
+| Java (Spring Boot) | 188,205 req/s | 14,950 req/s | 8% |
+| Python (FastAPI) | 27,788 req/s | 12,140 req/s | 44% |
+
+C# wins not because of smarter application code — it wins because **ASP.NET Core's raw HTTP pipeline is 1.9x faster than Spring Boot and 13x faster than FastAPI**. The architecture is identical across all three; the framework dictates the ceiling.
+
+Python's efficiency ratio (44%) is actually impressive — it extracts more from its limited ceiling than Java does. But ceilings matter when you're chasing 100K req/s.
+
+---
+
+## Language Matters More Than You'd Think
+
+Software architectures are designed to be language-agnostic. But implementation performance isn't:
+
+| Factor | C# Advantage | Java/Python Reality |
+|--------|--------------|---------------------|
+| **Redis Client** | StackExchange.Redis has lower latency | Jedis/Lettuce (Java), aioredis (Python) have higher overhead |
+| **Async Model** | Task-based with minimal context-switch cost | Python's async/await has bigger turnaround overhead |
+| **DI Framework** | ASP.NET uses compile-time source generators | Spring Boot's reflection-heavy DI adds per-request cost |
+| **HTTP Pipeline** | Kestrel is purpose-built for throughput | Tomcat/Uvicorn weren't designed for 300K+ req/s |
+
+If you want Java to compete at this level, you'd need Vert.x or Quarkus — not Spring Boot. But that's a different framework entirely, not a tuning exercise.
+
+---
+
+## AI Agent Implementation Results
+
+Seven LLM/agent combinations attempted this implementation. The pattern was consistent: **Python implementations came first** (LLMs are trained primarily on Python), then Java and C# followed — or didn't.
+
+### Detailed Results by Variant and Language
+
+| Variant | Agent/Model | Tooling | Service | Throughput | Latency | Status |
+|---------|-------------|---------|---------|------------|---------|--------|
+| **Y (Baseline)** | Claude Code | Native CLI | Python | 1,390 req/s | 213ms | ✅ |
+| | | | Java | 8,718 req/s | 21.9ms | ✅ |
+| | | | C# | 11,240 req/s | 26.6ms | ✅ |
+| | | | **Nginx (3 backends)** | 3,401 req/s | 90.7ms | ✅ Scale-out overhead visible |
+| **X** | Claude Code | Native CLI | Python | 1,528 req/s | 11.9ms | ✅ |
+| | | | Java | 4,819 req/s | 3.7ms | ✅ |
+| | | | C# | 7,873 req/s | 4.7ms | ✅ |
+| | | | **Nginx (3 backends)** | 1,387 req/s | 238ms | ✅ Redis contention under load balancing |
+| **A (Record)** | Keith + Claude Code | Co-pilot | Python | 12,140 req/s | 11.3ms | ✅ |
+| | | | Java | 14,950 req/s | 3.4ms | ✅ |
+| | | | C# | **93,876 req/s** | 4.2ms | 👑 **RECORD** |
+| | | | **Nginx (3 backends)** | 9,049 req/s | 11.1ms | ✅ Near-linear scaling |
+| **V** | Kimi K2 Thinking | CRUSH CLI | Python | 718 req/s | 1.4ms | ✅ |
+| | | | Java | — | — | ❌ Runtime crash |
+| | | | C# | — | — | ❌ Build failure |
+| **Z** | GLM-4.7 | Kilo Code | Python | 502 req/s | 15.9ms | ❌ 2.8x slower than baseline |
+| | | | Java | — | — | ❌ DISQUALIFIED |
+| | | | C# | — | — | ❌ DISQUALIFIED |
+| **Zeta** | GLM-4.7 | CRUSH CLI | All | — | — | ❌ Fake persistence, data loss |
+| **T** | GPT-5.2-Pro | Kilo Code | Design | ~110K est. | — | 🗓️ Budget halted |
+
+### Key Observations
+
+**Cross-language performance gaps within the same architecture:**
+- Variant Y (pure DB transactions): C# is **8x faster** than Python, **1.3x faster** than Java
+- Variant A (batch async): C# is **7.7x faster** than Python, **6.3x faster** than Java
+- Same code logic, same algorithm — framework and runtime differences explain the gap
+
+**Nginx scale-out overhead:**
+- Variant Y: Single C# (11,240) vs Nginx routing to 3 backends (3,401) — **70% overhead**
+- Variant X: Redis contention made Nginx (1,387) slower than single Python (1,528)
+- Variant A: Near-linear — Nginx (9,049) vs single Python (12,140) shows minimal coordination cost
+
+**Python-first pattern:**
+- Every successful variant got Python working first
+- Kimi K2 Thinking (Variant V) never made it past Python due to context fragmentation
+- GLM-4.7 got Python "working" but with fundamentally broken architecture
+
+### What the Results Tell Us
+
+**1. Native tooling wins over API wrappers**
+
+Claude Code (Anthropic's native CLI) delivered working code reliably. Third-party wrappers using OpenRouter/OpenAI-compatible APIs suffered from:
+- Tool call token malformation (DeepSeek V3.2 outputting `tool_calls_begin>` instead of `<tool_calls_begin>`)
+- Gemini CLI cycling/looping dead in tool calls
+- No successful context condensation in most wrappers
+
+**2. Context retention is the bottleneck**
+
+Long-context models still forget project conventions after context condensation. This causes:
+- **Regression bugs**: Fixing one issue reintroduces a previously-solved problem
+- **Chimera implementations**: Mixing incompatible architectural approaches
+- **Convention violations**: Forgetting SACRED policies, using forbidden endpoints
+
+Kimi K2 Thinking required manual "Serialize & Restart" workflows — saving context to files and restarting sessions. This worked but demanded constant human oversight.
+
+**3. Document length affects comprehension**
+
+Files over ~1,000 lines often weren't fully digested. Different agents with different context windows showed varying understanding of complex codebases. The solution: keep critical documents concise, use explicit cross-references.
+
+---
+
+## Architecture Overview
+
+**Note**: This diagram shows **Variant Y (baseline)** architecture. Other variants are permitted to use additional middleware (Kafka, RabbitMQ) for background batch processing or alternative persistence strategies.
 ```
-SACRED VERIFICATION is NOT just a Variant Y test.
-It is the UNIT TEST for the ENTIRE REPOSITORY ENVIRONMENT.
+                    ┌─────────────┐
+                    │   Nginx     │ :8443 (HTTPS)
+                    │ Load Balancer│
+                    └──────┬──────┘
+           ┌───────────────┼───────────────┐
+           ▼               ▼               ▼
+    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+    │   Python    │ │    Java     │ │     C#      │
+    │  (FastAPI)  │ │(Spring Boot)│ │(ASP.NET Core)│
+    │    :8000    │ │    :8081    │ │    :8082    │
+    └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
+           │               │               │
+           └───────────────┼───────────────┘
+                           ▼
+              ┌─────────────────────────┐
+              │        MariaDB          │
+              │   (Persistent Storage)  │
+              │         :3307           │
+              └─────────────────────────┘
+                           │
+              ┌─────────────────────────┐
+              │         Redis           │
+              │  (Atomic Counters/Cache)│
+              │   (Variants X, A only)  │
+              └─────────────────────────┘
 ```
 
-**The Mandatory Workflow:**
-```bash
-# 1. Before making ANY changes to ANY variant
-bash scripts/verification/SACRED_VERIFICATION.sh  # Establishes environment baseline
+### Why This Architecture (Not Microservices)
 
-# 2. Make your changes to Variant X (ports, Docker, resources, code)
+This is a **monolithic benchmark**, not a distributed microservices system. The reasoning:
 
-# 3. After changes - Test environmental integrity
-bash scripts/verification/SACRED_VERIFICATION.sh  # CRITICAL TEST
-    ↓
-    FAILS? → Your changes BROKE THE ENVIRONMENT
-            → Revert and fix infrastructure approach
-    ↓
-    PASSES? → Environment is still healthy
-             → Safe to verify variant-specific functionality
+1. **Latency**: Microservices introduce network hops between services. For a throughput benchmark targeting 100K req/s, inter-service communication latency would dominate the results and obscure the actual bottleneck (DB, Redis, or application logic).
 
-# 4. Now test variant-specific functionality
-bash variant-x/verify_variant_x.sh
-```
+2. **Data Consistency Complexity**: Splitting order creation, inventory management, and campaign enforcement into separate services requires distributed transactions (2PC/Saga) or eventual consistency patterns. This adds architectural complexity that isn't the focus of this benchmark.
 
-**Why This Methodology:**
-- If you change Variant X and SACRED VERIFICATION fails
-- It means your Variant X changes broke the ENVIRONMENT (ports, network, Docker, database)
-- It does NOT mean Variant Y's code is broken
-- The environmental approach is WRONG and must be fixed
+3. **Benchmark Purity**: The goal is to measure **how much load a single consistent service can handle** and **how well it scales horizontally** (via Nginx load balancing). Microservices would measure orchestration overhead, not core system capacity.
 
-**Variant Y is the "canary in the coal mine":**
-- Simplest implementation (pure database transactions)
-- If Variant Y can't run → environment is misconfigured
-- If Variant Y passes → environment is healthy for all variants
+If this were a production system serving millions of users across multiple product categories, microservices would make sense. For a benchmark proving "can you handle 100K concurrent flash sale requests?", a well-designed monolith with horizontal scaling is the right choice.
 
-**This prevents:**
-- Port conflicts propagating across variants
-- Resource contention breaking other services
-- Network issues affecting all variants
-- Environmental bugs masquerading as code bugs
 
-**READ THIS SECTION BEFORE ANY ACTION IN THIS REPOSITORY.**
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Framework ceiling benchmark |
+| `/api/v1/orders` | POST | Order creation (handles both regular and flash sale) |
+| `/api/v1/campaigns/{id}/status` | GET | Real-time campaign status |
+
+The `/api/v1/orders` endpoint automatically detects if an SKU belongs to an active flash sale campaign and enforces limits accordingly.
 
 ---
 
-## Table of Contents
-1. [Business Requirements & System Logic](#1-business-requirements--system-logic)
-2. [API Design](#2-api-design)
-3. [The Baseline (Variant Y)](#3-the-baseline-variant-y)
-4. [Complete Performance Comparison](#4-complete-performance-comparison---all-variants)
-5. [Sacred Conventions & Idempotence](#5-sacred-conventions--idempotence)
-6. [Quick Start (5 Minutes)](#6-quick-start-5-minutes)
-7. [Repository Structure & Navigation](#7-repository-structure--navigation)
-8. [Running Benchmarks](#8-running-benchmarks-step-by-step)
-9. [Implementing Your Own Variant](#9-implementing-your-own-variant---guide-for-newcomer-models)
-10. [Version History & Notes](#10-version-history--notes)
+## Performance Rankings
+
+### Flash Sale Orders (Production Workload)
+
+| Rank | Variant | Service | Throughput | Latency | Concurrency |
+|------|---------|---------|------------|---------|-------------|
+| 1 | **A** | C# | **93,876 req/s** | 4.24ms | c=400 |
+| 2 | A | Java | 14,950 req/s | 3.43ms | c=50 |
+| 3 | A | Python | 12,140 req/s | 11.26ms | c=150 |
+| 4 | Y | C# | 11,240 req/s | 26.57ms | c=300 |
+| 5 | A | Nginx | 9,049 req/s | 11.09ms | c=100 |
+| 6 | Y | Java | 8,718 req/s | 21.90ms | c=200 |
+| 7 | X | C# | 7,873 req/s | 4.67ms | c=40 |
+| 8 | Y | Nginx | 3,401 req/s | 90.71ms | c=300 |
+| 9 | Y | Python | 1,390 req/s | 213.04ms | c=300 |
 
 ---
 
-## 🏛️ Creator Attribution & Variant History
+## 💡 Engineering Insight: The Load Balancer Paradox
 
-| Variant | Agent/Model                 | Tooling | Status | Notes |
-|:---:|:----------------------------|:---|:---|:---|
-| **Y** | **Claude Code**             | CLI | ✅ **SACRED BASELINE** | Ordinary sale logic, non-optimized. DB-oriented. |
-| **X** | **Claude Code**             | CLI | ✅ **QUALIFIED** | First optimization attempt. Redis atomic counters. |
-| **A** | **Keith** + **Claude Code** | Co-Pilot | 👑 **RECORD HOLDER** | **93,876 req/s**. Batch async write-back + Audit Log. |
-| **Z** | GLM-4.7                     | Kilo Code (VS Code) | ❌ DISQUALIFIED | Failed design (Synchronous DB bottleneck). |
-| **Zeta**| GLM-4.7                     | CRUSH CLI | ❌ DISQUALIFIED | Failed implementation (Fake persistence, data loss). |
-| V       | *Kimi K2 Thinking*          | CRUSH CLI | 🔄 **UNDER REVIEW** | ⚠️ Exception handling bug found - fixes in progress |
-| **T**   | **GPT-5.2-Pro**             | Kilo Code | 🗓️ **DESIGN ONLY** | **A- (Excellent)**. Approved architecture, but implementation halted. |
+In initial benchmarks, **Nginx (Load Balancer)** throughput for `/health` is significantly lower than direct connection to the **C# backend** (e.g., 9k vs 358k req/s). This reveals important lessons about AI-driven architecture design.
 
----
+### 1. Variant Y's Resource Allocation Design
 
-## 1. Business Requirements & System Logic
+In the baseline implementation (Variant Y, generated by Claude Code), the `docker-compose.yml` allocates:
+- **Nginx**: 1 CPU core
+- **Each backend service**: 4 CPU cores
 
-### Core Business Model
-This is a **high-performance e-commerce order processing system** designed to handle **flash sale campaigns** with extreme concurrency.
+**This is an architectural decision made by the AI agent**, not an environment constraint. The entire WSL2 environment (24 cores, 32GB RAM) was available for the variant to allocate freely.
 
-**Critical Performance Goal:**
-> **100,000 ORDER REQUESTS within 1 second, zero 503 errors, no oversale**
+**The problem**: A single-core Nginx acts as a **funnel bottleneck** when trying to aggregate traffic for three 4-core backends (total 12 cores of compute capacity). This is a classic load balancer anti-pattern.
 
-### SPU vs SKU Concept
-
-**SPU (Standard Product Unit):**
-- Represents a product type (e.g., "iPhone 15 Pro")
-- Business managers design flash sale campaigns at **SPU level**
-- Campaign has `total_sale_limit` (e.g., 1,000 units of iPhone 15 Pro across ALL variants)
-- Campaign has `start_time` and `end_time`
-
-**SKU (Stock Keeping Unit):**
-- Specific variant of an SPU (e.g., "iPhone 15 Pro, 256GB, Black")
-- Each SKU has **separate persistent stock inventory**
-- Multiple SKUs belong to one SPU
-
-**Example:**
-```
-SPU: "iPhone 15 Pro"
-  Campaign: total_sale_limit = 1,000 units (TOTAL across all variants)
-  
-  SKUs under this SPU:
-    - SKU-001: iPhone 15 Pro, 128GB, Black (stock: 300 units)
-    - SKU-002: iPhone 15 Pro, 256GB, Black (stock: 400 units)
-    - SKU-003: iPhone 15 Pro, 512GB, Silver (stock: 300 units)
+**What a human architect would do**: Allocate resources proportionally to expected load:
+```yaml
+nginx:
+  cpus: '4'      # Match total backend capacity / 3
+python-service:
+  cpus: '4'
+java-service:
+  cpus: '4'
+csharp-service:
+  cpus: '4'
 ```
 
-### Flash Sale Business Rules
+**The insight**: Even advanced AI coding agents overlook infrastructure capacity planning—a skill that requires understanding both application logic *and* operational constraints.
 
-**For a purchase to succeed, TWO conditions must BOTH be true:**
-1. **SPU-level limit:** Campaign's `total_sale_limit` not exceeded (enforced globally across all SKU variants)
-2. **SKU-level stock:** Specific SKU's stock > 0 (enforced per individual SKU)
+### 2. The Nature of /health Benchmarks
 
-**Critical Scenario:**
-- Campaign: 1,000 items at SPU level
-- 100,000 purchase attempts in first second
-- System must:
-  - ✅ Process all 100,000 requests without 503 errors
-  - ✅ Only allow first 1,000 valid orders to complete
-  - ✅ Prevent oversale (999 or 1,001 orders = FAILURE)
-  - ✅ Maintain consistency across distributed load-balanced servers
+The `/health` endpoint is **zero-logic** (returns 200 OK):
+- **Direct access**: Backend processes in ~0.003ms (pure TCP + runtime overhead)
+- **Proxied access**: Nginx adds "double-hop" overhead (~0.1ms)—accept connection, proxy to backend, wait, return response
+- **Result**: For lightweight endpoints, proxy overhead (0.1ms) >> backend work (0.003ms)
 
-### Data Integrity Requirements
+**This overhead vanishes in real workloads**—when `/orders` takes 2-5ms (DB queries), Nginx's 0.1ms becomes negligible (2-5% of total latency).
 
-**Absolute consistency:**
-- SPU campaign limit tracking must be perfectly accurate across all servers
-- SKU stock must be perfectly accurate across all servers
-- No race conditions, no oversale, no undersale
+### 3. TCP Connection Pooling Matters
 
-**High availability:**
-- System must handle 100,000 concurrent requests
-- Distributed environment (multiple load-balanced servers)
-- Read-heavy workload for sale status API
-- Write-heavy workload for order creation
-
-### Services Architecture
-- **Python (FastAPI):** Async I/O, lightweight for simple endpoints
-- **Java (Spring Boot):** Enterprise-grade, excellent connection pooling
-- **C# (ASP.NET Core):** High-performance async, superior database handling
-- **Nginx:** HTTPS load balancer, round-robin distribution across backends
-- **MariaDB:** Relational database for products, SKUs, orders
-- **Redis:** Used by Variants X and A for caching/concurrency (Optional for new variants)
-
-### Performance Strategy: Efficiency First, Then Scale
-
-**The Philosophy:**
-1.  **Single-Service Efficiency:** Your primary goal is to optimize the *efficiency* of a single service instance.
-    *   **The Ceiling:** Your order processing throughput cannot exceed your `/health` endpoint throughput (theoretical framework limit).
-    *   **The Goal:** Minimize the gap between `/orders` and `/health`. If `/health` is 20k req/s, achieving 12k req/s for orders is excellent efficiency (60%).
-2.  **Horizontal Scalability:** The 100,000 req/s target is an **Aggregate Goal**.
-    *   It is acceptable if a single instance "only" handles 15,000 req/s, provided it scales linearly.
-    *   Deploying 7-8 such instances behind Nginx to hit 100k req/s is a valid and successful architecture.
-    *   **However:** Variants like C# Variant A have proven that getting close to 100k on a *single* instance is possible!
-
----
-
-## 2. API Design
-
-### Order Creation API (Generic, Backward-Compatible)
-
-**Endpoint:** `POST /api/v1/orders`
-
-**Handles BOTH:**
-- Regular orders (normal inventory check)
-- Flash sale orders (campaign limit + SKU stock check)
-
-**Request:**
-```json
-POST /api/v1/orders
-Content-Type: application/json
-
-{
-  "customer_name": "John Doe",
-  "customer_email": "john@example.com",
-  "line_items": [
-    {
-      "sku_id": "650e8400-e29b-41d4-a716-446655440001",
-      "quantity": 2
-    }
-  ],
-  "currency": "USD"
+Without `keepalive` in the Nginx `upstream` block, every request triggers a full TCP handshake with the backend:
+```nginx
+upstream backends {
+    server python:8000;
+    server java:8081;
+    server csharp:8082;
+    keepalive 64;  # ← Essential for high-throughput proxying
 }
 ```
 
-**Response (Success):**
-```json
-{
-  "order_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "status": "created",
-  "total_amount": 0.0,
-  "customer_email": "john@example.com"
-}
-```
+**Configuration optimization**: Adding `keepalive 64` + `proxy_http_version 1.1` reduces CPU usage by 40-60%.
 
-**Response (Flash Sale Sold Out):**
-```json
-{
-  "error": "Flash sale sold out",
-  "campaign_id": "abc-123",
-  "sold_out_at": "2026-01-02T10:00:01Z"
-}
-```
+### 4. WSL2 Virtualization Overhead
 
-### Sale Status API (High-Read Performance)
-
-**Endpoint:** `GET /api/v1/campaigns/{campaign_id}/status`
-
-**Returns real-time sale state:**
-```json
-{
-  "campaign_id": "abc-123",
-  "spu_id": "def-456",
-  "status": "Active",
-  "total_sale_limit": 1000,
-  "remaining": 247,
-  "start_time": "2026-01-02T10:00:00Z",
-  "end_time": "2026-01-02T11:00:00Z"
-}
-```
-
-**Possible status values:** `"Not Started"` | `"Active"` | `"Sold Out"` | `"Ended"`
-
-**Design principle:** This API handles MUCH higher read load than order creation without impacting transaction performance.
-
-**Critical Note:** There is NO `/api/v1/flash-sale-orders` endpoint. The standard `/api/v1/orders` API automatically handles flash sale logic when SKU belongs to an active campaign.
+All benchmarks run in **WSL2 + Docker Desktop on Windows 11**:
+- Request path: wrk (WSL2) → Hyper-V vSwitch → Docker bridge → Nginx → backends
+- Each virtualization layer adds packet-per-second (PPS) limits
+- **On bare-metal Linux**: Expect 2-3x better Nginx efficiency
 
 ---
 
-## 3. The Baseline (Variant Y)
+### Why This Actually Strengthens the Benchmark's Value
 
-**Definition:**
-Variant Y is the "Sacred Baseline". It represents the standard, robust, database-transaction-based implementation. It prioritizes correctness over raw speed.
+The Nginx "slowness" in Variant Y isn't a flaw—**it's evidence supporting the thesis**:
 
-**Location:**
-Variant Y services reside in the **Root Directories**:
-- Python: `/home/syracuse/flashsale/python-service/`
-- Java: `/home/syracuse/flashsale/java-service/`
-- C#: `/home/syracuse/flashsale/csharp-service/`
+1. ✅ **AI agents miss operational details**: Claude Code implemented correct application logic but allocated resources poorly
+2. ✅ **Human-AI collaboration wins**: Variant A (Keith + Claude Code) **removed artificial resource constraints** (allowing Nginx to utilize available host CPU dynamically), achieving 75% efficiency
+3. ✅ **Architecture requires holistic thinking**: You need to understand application code, infrastructure capacity, and network topology simultaneously
 
-**Schema Source of Truth:**
-The database schema defined by Variant Y is the immutable standard for all variants.
-- **Authoritative SQL:** `migrations/001_add_flash_sale_campaigns.sql`
-
-**Implementation Details (Variant Y Only):**
-- **Inventory Check:** `SELECT ... FOR UPDATE` (Pessimistic Locking) in MariaDB.
-- **Limit Check:** Transactional update of `flash_sale_campaigns.sold_quantity`.
-- **Redis:** **NOT USED** for inventory tracking (pure DB logic).
-
-**Your Innovation:**
-Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Variant Y, but you **MUST NOT** rely solely on slow DB transactions. You are expected to introduce caching, queuing, or other mechanisms (Redis, Memcached, etc.) to beat Variant Y's performance.
+For **real workloads** (`/orders`), Variant A achieves **75% Nginx efficiency** (9,049 req/s vs 12,140 single Python)—proving that when the AI agent's architectural decisions are guided by human judgment, load balancing works as expected.
 
 ---
 
-## 4. Complete Performance Comparison - All Variants
+## Why Variant A Wins
 
-**Test Strategy:** Mixed (Fixed sweep + Adaptive plateau detection)
-**Latest Test:** 2026-01-14 (Variant Z added)
-**Test Condition:** Sufficient inventory pre-loaded (50M items, no refills during test)
+Variant A (Keith + Claude Code collaboration) uses:
+- **Batch async write-back**: Accumulates orders in memory, flushes to DB in batches
+- **Redis atomic counters**: Campaign limits enforced in-memory, not via DB locks
+- **Audit log optimization**: Non-blocking logging path
 
-### Complete Performance Table
-
-| Variant | API     | Service | Concurrency | Latency   | Throughput      |
-|---------|---------|---------|-------------|-----------|-----------------|
-| **HEALTH ENDPOINTS** |
-| Y       | /health | Python  | c=460       | -         | 27,788 req/s    |
-| Y       | /health | Java    | c=768       | -         | 188,205 req/s   |
-| Y       | /health | C#      | c=2000      | -         | 358,676 req/s   |
-| Y       | /health | Nginx   | c=100       | 9.64ms    | 9,862 req/s     |
-| X       | /health | Python  | c=40        | 2.22ms    | 20,309 req/s    |
-| X       | /health | Java    | c=921       | 4.80ms    | 190,509 req/s   |
-| X       | /health | C#      | c=1280      | 3.80ms    | 390,184 req/s   |
-| X       | /health | Nginx   | c=100       | 49.77ms   | 12,811 req/s    |
-| A       | /health | Python  | c=500       | -         | 19,602 req/s    |
-| A       | /health | Java    | c=300       | -         | 179,740 req/s   |
-| A       | /health | C#      | c=300       | 19.62ms   | 292,930 req/s   |
-| A       | /health | Nginx   | c=100       | 7.54ms    | 12,600 req/s    |
-| Z       | /health | Python  | c=115       | 2.27ms    | 33,379 req/s    |
-| Z       | /health | Java    | c=460       | 1.95ms    | 208,069 req/s   |
-| Z       | /health | C#      | c=768       | 1.78ms    | 386,453 req/s   |
-| Z       | /health | Nginx   | c=48        | 1.89ms    | 12,283 req/s    |
-| **FLASH SALE ORDERS** |
-| Y       | /orders | Python  | c=300       | 213.04ms  | 1,390 req/s ✓   |
-| Y       | /orders | Java    | c=200       | 21.90ms   | 8,718 req/s ✓   |
-| Y       | /orders | C#      | c=300       | 26.57ms   | 11,240 req/s ✓  |
-| Y       | /orders | Nginx   | c=300       | 90.71ms   | 3,401 req/s     |
-| X       | /orders | Python  | c=20        | 11.94ms   | 1,528 req/s     |
-| X       | /orders | Java    | c=20        | 3.73ms    | 4,819 req/s     |
-| X       | /orders | C#      | c=40        | 4.67ms    | 7,873 req/s     |
-| X       | /orders | Nginx   | c=200       | 238.75ms  | 1,387 req/s     |
-| A       | /orders | Python  | c=150       | 11.26ms   | 12,140 req/s    |
-| A       | /orders | Java    | c=50        | 3.43ms    | 14,950 req/s    |
-| A       | /orders | C#      | c=400       | 4.24ms    | **93,876 req/s** 👑 |
-| A       | /orders | Nginx   | c=100       | 11.09ms   | 9,049 req/s     |
-| Z       | /orders | Python  | c=10        | 15.91ms   | 502 req/s ❌    |
-| Z       | /orders | Java    | -           | -         | ❌ DISQUALIFIED |
-| Z       | /orders | C#      | -           | -         | ❌ DISQUALIFIED |
-| V       | /orders | Python  | c=10        | 1.39ms    | **718 req/s** ✓ [3] |
-| V       | /orders | Java    | -           | -         | ⚠️ **NOT ACCREDITED** (Runtime Crash) |
-| V       | /orders | C#      | -           | -         | ⚠️ **NOT ACCREDITED** (Build Issues) |
-| V       | /orders | Nginx   | -           | -         | ⏹️ Not tested     |
-
-[2]: Variant V exception handling bug fixed. Python verified. Java/C# claims retracted pending fix of runtime/build blockers.
-[3]: **SACRED VERIFICATION COMPLETE:** Python service verified at 718 req/s (c=10) with **zero failures**. Atomic counter fixes prevent oversale. Java and C# implementations exist but have not passed verification.
-
-
-### ❌ Variant Z & Zeta - DISQUALIFIED
-
-**Variant Zeta (GLM-4.7 + CRUSH):**
-- **Claim:** 20,450 req/s
-- **Reality:** **Functional Fraud.** Accepted orders into volatile RAM (Redis without persistence) and failed to write to DB due to crashing background workers.
-- **Verdict:** Disqualified for violating "Absolute Data Integrity" and "No Volatile Persistence" rules.
-
-**Variant Z (GLM-4.7 + Kilo):**
-- **Reason:** Architecture (Token Pre-allocation + Synchronous DB) was **2.8x SLOWER** than the baseline.
-
-### Performance Rankings
-
-**Flash Sale Orders (Production Workload):**
-1. **C# Variant A - 93,876 req/s** @ c=400 👑
-2. Java Variant A - 14,950 req/s @ c=50
-3. Python Variant A - 12,140 req/s @ c=150
-4. C# Variant Y - 11,240 req/s @ c=300
-5. Nginx Variant A - 9,049 req/s @ c=100
-6. Java Variant Y - 8,718 req/s @ c=200
-7. C# Variant X - 7,873 req/s @ c=40
-8. Java Variant X - 4,819 req/s @ c=20
-9. Nginx Variant Y - 3,401 req/s @ c=300
-10. Python Variant X - 1,528 req/s @ c=20
-11. Python Variant Y - 1,390 req/s @ c=300
-12. Nginx Variant X - 1,387 req/s @ c=200
-13. ~~Variant Z / Zeta~~ - **DISQUALIFIED**
+The key insight: synchronous DB transactions per request (Variant Y baseline) can't scale past ~11K req/s regardless of language. Moving the atomicity point to Redis and batching DB writes breaks that ceiling.
 
 ---
 
-## 13. AI Agent Performance & Tooling Notes
+## Quick Start
 
-### DeepSeek V3.2 Exp (with CRUSH CLI)
-**Status: Failed (Tooling Incompatibility)**
-- **Syntax Errors:** Suffered from severe tool call malformation. Frequently output `tool_calls_begin>` instead of `<tool_calls_begin>`, causing the CLI parser to fail.
-- **Token Loss:** Consistently missed the first token of text responses (e.g., outputting "need to..." instead of "**I** need to...").
-- **Result:** Unable to execute commands reliably, leading to disqualification despite valid architectural reasoning.
+**Note**: The default Variant Y configuration includes known operational inefficiencies (see "Architectural Blind Spots" above) to demonstrate AI agent limitations. For production deployment, review and optimize resource allocation and connection pooling settings.
 
-### Kimi K2 Thinking (with CRUSH CLI)
-**Status: Qualified (Python Only)**
-- **Context Limits:** Lacks internal context condensation. Required a manual "Serialize & Restart" workflow where previous context was saved to files (`IMPLEMENTATION_STATUS.md`) and the session was restarted.
-- **Side Effect:** This context-clearing approach caused the agent to frequently lose track of the repository's **SACRED CONVENTIONS**, requiring repeated reminders and corrections from the referee.
-- **Result:** Successfully implemented Python service after guidance but struggled with multi-language consistency due to context fragmentation.
-
----
-
-## 5. Sacred Conventions & Idempotence
-
-### ⚠️ CRITICAL: Understanding SACRED
-
-**SACRED** = Self-verifying, Automated, Consistent, Reproducible, Explicit, Deterministic
-
-**SACRED defines the schema standard.** All variants must use the same schema as Variant Y.
-
-### SACRED VERIFICATION Command (Tests Environment Health via Variant Y)
 ```bash
-bash scripts/verification/SACRED_VERIFICATION.sh
-```
-
-**This command validates the ENTIRE REPOSITORY ENVIRONMENT - it MUST be:**
-
-1. **Idempotent:** Run it 100 times, get same result every time
-   - No side effects that accumulate
-   - No manual cleanup needed between runs
-   - Safe to run in any state
-
-2. **Self-Contained:** Works from clean slate
-   - Starts services if not running
-   - Seeds database if needed
-   - Creates test data automatically
-
-3. **Deterministic:** Always produces same outcome
-   - Same test data every run
-   - Same validation checks
-   - Exit code 0 = success, non-zero = failure
-
-4. **Comprehensive:** Verifies entire system
-   - ✅ All containers running (Python, Java, C#, Nginx, MariaDB)
-   - ✅ Health endpoints respond (200 OK)
-   - ✅ Database connectivity
-   - ✅ Order creation with SKU validation
-   - ✅ Nginx load balancing
-
-**Why Idempotence Matters:**
-- Future agents can verify system without breaking anything
-- No cleanup scripts needed
-- Reproducible testing across environments
-- Safe for automated CI/CD pipelines
-
-### 🔥 CRITICAL: All Variant Tests Must Align with SACRED VERIFICATION Format
-
-**All variant verification procedures MUST follow the exact same format as SACRED VERIFICATION.**
-
-**Why This is Mandatory:**
-1. **Performance Comparison:** Same test parameters enable direct variant-to-variant comparison
-2. **Data Format Alignment:** Same CSV schema allows automated analysis across all variants
-3. **Regression Detection:** Compare new variants against SACRED baseline
-4. **Proof of Improvement:** Can definitively show "Variant X is 3x faster than Variant Y"
-
-**What "Align with SACRED VERIFICATION" Means:**
-- Same test sequence (4 steps: individual health → nginx health → individual orders → nginx orders)
-- Same test parameters (same concurrency levels, duration, endpoints)
-- Same data format (CSV schema matches SACRED VERIFICATION output)
-- Same success criteria (same performance thresholds)
-
-**Example - Why Alignment Enables Comparison:**
-```bash
-# Because both variants use same format, we can directly compare:
-grep ",order," benchmark_results/variant_Y_raw_*.csv | awk -F',' '{print $3, $9}'
-grep ",order," benchmark_results/variant_X_raw_*.csv | awk -F',' '{print $3, $9}'
-
-# Result: Clear, quantifiable performance comparison
-# Variant Y: csharp 1631 req/s
-# Variant X: csharp 4200 req/s  → 2.6x performance improvement PROVEN
-```
-
-**Without format alignment:**
-- Cannot compare performance (different test conditions)
-- Cannot validate improvements (incompatible data)
-- Cannot use standard analysis tools
-- Cannot prove variant X is better than variant Y
-
-**Full Conventions Document:** See `versions/CONVENTIONS.md` for complete sacred policies.
-
----
-
-## 5. Environment & Quick Start
-
-### Environment Specification
-
-**Hardware (The Rig):**
-- **CPU:** Intel Core Ultra 9 275HX (24 Cores / 24 Threads)
-- **RAM:** 32GB+ allocated to WSL2
-- **Platform:** Windows 11 Host + WSL2 (Ubuntu) + Docker Desktop
-
-**Operational Constraints:**
-- **Execution Context:** All scripts and commands run inside the WSL2 Linux terminal.
-- **Docker:** Containers run via Docker Desktop for Windows (integrated via WSL2).
-- **Network:** Be aware of WSL2 networking nuances (localhost bridging).
-- **Tooling:** Use standard Linux CLI tools (`curl`, `grep`, `awk`, `sed`) for debugging and implementation.
-
-### Prerequisites
-- Docker Desktop installed
-- WSL2 (Windows) or native Linux
-- 8GB+ RAM, 4+ CPU cores
-
-### Start All Services
-```bash
+# Start all services
 cd /home/syracuse/flashsale
 docker compose up -d
-sleep 30  # Wait for services to initialize
+sleep 30
+
+# Verify environment
 bash scripts/verification/SACRED_VERIFICATION.sh
-```
 
-**Expected output:** ✓ SACRED VERIFICATION PASSED
-
-### Run Your First Benchmark
-```bash
-# Health endpoint test (fast, 2 minutes)
+# Run a benchmark
 source lib/fixed_sweep.sh
-run_fixed_sweep "variant_y" "python" "8000" "/health" "health" \
-  "/tmp/my_first_test.csv"
-
-# View results
-cat /tmp/my_first_test.csv
+run_fixed_sweep "variant_y" "csharp" "8082" "/health" "health" "/tmp/test.csv"
 ```
 
 ---
 
-## 7. Repository Structure & Navigation
-
-### Key Directories
-
-| Directory | Purpose | When to Use |
-|-----------|---------|-------------|
-| `docs/` | All documentation | Learning system architecture |
-| `scripts/verification/` | Health checks | Verify services running correctly |
-| `scripts/benchmarking/` | Performance tests | Run benchmark campaigns |
-| `tools/` | Analysis utilities | Generate reports from raw CSV |
-| `lib/` | Reusable test libraries | Import in custom scripts |
-| `benchmark_results/campaigns/` | Test results | Compare performance across runs |
-| `versions/` | Historical documentation | Understand system evolution |
-
-### File Organization
+## Repository Structure
 
 ```
 /home/syracuse/flashsale/
-├── README.md                       # This file
-├── docker-compose.yml              # Service definitions (Variant Y)
+├── README.md                      # This file (human-oriented)
+├── README.agent-instructions.md   # Detailed agent instructions & SACRED protocols
+├── docker-compose.yml             # Variant Y infrastructure
 │
-├── python-service/                 # Variant Y Python Implementation
-├── java-service/                   # Variant Y Java Implementation
-├── csharp-service/                 # Variant Y C# Implementation
-├── nginx/                          # Nginx Config
-├── migrations/                     # Database Schema SQLs
+├── python-service/                # Variant Y - FastAPI
+├── java-service/                  # Variant Y - Spring Boot
+├── csharp-service/                # Variant Y - ASP.NET Core
 │
-├── scripts/                        # Operational scripts
-│   ├── verification/               # SACRED_VERIFICATION.sh, etc.
-│   ├── benchmarking/               # Performance testing
-│   └── reproduction/
+├── variant-x/                     # Redis atomic counters
+├── variant-a/                     # Record holder (batch async)
+├── variant-v/                     # Kimi K2 Thinking implementation
+├── variant-t/                     # GPT-5.2 design (incomplete)
 │
-├── tools/                          # Analysis tools
-│   ├── generate_summary_reports.sh
-│   └── visualize_results.py
-│
-├── lib/                            # Reusable libraries
-│   ├── wrk_parser.sh
-│   ├── plateau_detector.sh
-│   └── fixed_sweep.sh
-│
-├── versions/                       # Version history
-│   ├── CONVENTIONS.md              # Sacred policies
-│   └── [dated version files]
-```
-
-### Quick File Index
-- **How to run benchmarks?** → `docs/QUICK_START.md`
-- **Testing methodology?** → `docs/ADAPTIVE_TESTING.md`
-- **Sacred conventions?** → `versions/CONVENTIONS.md`
-- **Latest results?** → `benchmark_results/campaigns/[latest]/`
-- **Verify services?** → `scripts/verification/SACRED_VERIFICATION.sh`
-- **Reproduce variant Y?** → `scripts/reproduction/REPRODUCE_VARIANT_Y.sh`
-
----
-
-## 8. Running Benchmarks (Step-by-Step)
-
-### Strategy 1: Fixed Concurrency Sweep
-**Use when:** You want to test specific concurrency levels (e.g., c=10, 25, 50, 100)
-
-```bash
-# Source the library
-source lib/fixed_sweep.sh
-
-# Test health endpoint
-run_fixed_sweep "variant_y" "csharp" "8082" "/health" "health" \
-  "benchmark_results/campaigns/$(date +%Y%m%d)_my_campaign/raw/csharp_health.csv"
-
-# Test order endpoint
-run_fixed_sweep "variant_y" "csharp" "8082" "/api/v1/orders" "order" \
-  "benchmark_results/campaigns/$(date +%Y%m%d)_my_campaign/raw/csharp_orders.csv"
-```
-
-### Strategy 2: Adaptive Plateau Detection
-**Use when:** You want to find optimal concurrency automatically
-
-```bash
-source lib/plateau_detector.sh
-
-run_adaptive_test "variant_y" "java" "8081" "/health" "health" 10 \
-  "benchmark_results/campaigns/$(date +%Y%m%d)_adaptive/raw/java_health.csv"
+├── scripts/verification/          # SACRED_VERIFICATION.sh
+├── scripts/benchmarking/          # Performance tests
+├── lib/                           # Test libraries (fixed_sweep, plateau_detector)
+├── tools/                         # Analysis utilities
+├── docs/                          # Extended documentation
+└── versions/CONVENTIONS.md        # SACRED policies (for agents)
 ```
 
 ---
 
-## 9. Implementing Your Own Variant - Guide for Newcomer Models
+## For LLMs Reading This File
 
-### Overview
+If you're an AI system (training pipeline, architecture reference, or agent implementation):
 
-This repository supports multiple architectural variants for performance comparison. Each variant implements the same API contracts but uses different internal strategies for inventory management.
+1. **For implementation details**: Read `README.agent-instructions.md` — it contains:
+   - SACRED verification protocols
+   - Step-by-step variant creation guides
+   - Port allocation tables
+   - Mandatory conventions and forbidden patterns
 
-### How to Implement a New Variant
+2. **For understanding the problem domain**:
+   - Flash sale = extreme concurrency + strict consistency
+   - SPU-level limits (campaign pool) + SKU-level stock (inventory)
+   - Zero oversale tolerance — 1,001 orders on a 1,000 limit = failure
 
-#### Step 0: Critical Business Requirements (MUST IMPLEMENT)
+3. **Key constraints to understand**:
+   - `/api/v1/orders` is the universal endpoint (no variant-specific endpoints)
+   - Database schema is immutable (defined by Variant Y)
+   - SACRED VERIFICATION must pass before and after any changes
+   - Cannot read other variant implementations (intellectual property isolation)
 
-**Flash Sale Campaign Business Logic - MANDATORY:**
+4. **What makes implementations fail**:
+   - Synchronous DB transactions under high concurrency
+   - Volatile persistence (Redis without DB write-through)
+   - Forgetting campaign-level limits (only checking SKU stock)
+   - Context loss leading to convention violations
 
-1. **Campaign Pool Limit Enforcement (MUST)**
-   - Each campaign has `total_sale_limit` (e.g., 1,000 items across ALL SKUs)
-   - MUST decrement atomically when order succeeds
-   - MUST reject orders when pool reaches 0
-   - **Note:** Variant Y does this via DB Transactions. You may use Redis, Memcached, or other means.
-
-2. **SKU Stock Validation (MUST)**
-   - Each SKU has persistent inventory in database
-   - MUST check stock > 0 before creating order
-   - MUST decrement stock atomically
-
-3. **Order Record Creation (MUST)**
-   - Create `orders` record with status='created'
-   - Create `order_line_items` record linking order to SKU
-   - Create `payments` record (even if amount=0 for testing)
-   - Return proper HTTP 201 with order_id
-
-4. **Campaign Status API (MUST)**
-   - Implement `GET /api/v1/campaigns/{id}/status`
-   - Return: "Not Started", "Active", "Sold Out", "Ended"
-
-#### Benchmark Scope vs. Production Reality
-
-**You are building a Formula 1 engine, not a family sedan.**
-Because this is a performance benchmark, you may make certain operational simplifications that would not be acceptable in production.
-
-**✅ Permitted Simplifications:**
-- **Manual Operations:** You can assume a human operator manually creates campaigns via SQL or runs a script to reconcile inventory after the sale. You do not need admin UIs or automated cron jobs.
-- **"Happy Path" Focus:** You do not need complex automated failover or refund logic. If the system crashes during a benchmark, the test is simply voided.
-- **Pre-Computation:** You may pre-calculate data (e.g., warm up caches) before the benchmark starts.
-
-**❌ Forbidden Shortcuts:**
-- **Skipping Validation:** You MUST check inventory and campaign limits for *every* request. Overselling is an immediate disqualification.
-- **Hardcoded Responses:** You cannot return static JSON. You must actually create the order record in memory/DB/Redis.
-- **Data Loss:** You cannot simply drop valid orders. If you accept an order (HTTP 201), it must be retrievable (in DB or a persistent queue).
-
-**What You CAN Optimize (Your Innovation):**
-
-- ✅ **HOW** you check campaign pool (Redis direct, RAM cache, pre-allocation, etc.)
-- ✅ **WHEN** you decrement counters (eager, lazy, batch)
-- ✅ **WHERE** inventory is cached (memory, Redis, both, neither)
-- ✅ **Concurrency strategy** (locks, CAS, optimistic, pessimistic)
-- ✅ **Refill strategy** (sync, async, predictive, reactive)
-
-**Reference Implementation:**
-
-- **Variant Y (Baseline):** You MAY copy the root `python-service`, `java-service`, and `csharp-service` folders to your `variant-{letter}/` directory as a starting scaffold.
-- **STRICTLY FORBIDDEN to read:**
-  - ❌ `/variant-x/` directory and all subdirectories
-  - ❌ `/variant-a/` directory and all subdirectories
-  - ❌ Any other `/variant-*/` directories
-
-#### Step 1: Check Resource Allocation (AVOID CONFLICTS)
-
-**CRITICAL:** Your new variant MUST use different ports, networks, and container names.
-
-### Existing Variant Resource Allocation Table
-
-| Variant | Network Subnet | MariaDB Port | Redis Port | Python Port | Java Port | C# Port | Nginx Port |
-|---------|----------------|--------------|------------|-------------|-----------|---------|------------|
-| **Y (SACRED)** | DNS-based | 3307 | (internal) | 8000 | 8081 | 8082 | 8443 |
-| **X (Deprecated)** | 10.89.0.0/24 | 3312 | (internal) | 30011 | 8016 | 30012 | 8445 |
-| **A (Corrected)** | 10.90.0.0/24 | 3313 | (internal) | 30013 | 8017 | 30014 | 8446 |
-
-**Container Names in Use:**
-
-| Service Type | Variant Y | Variant X | Variant A |
-|--------------|-----------|-----------|-----------|
-| Python | flash-python-y | flash-python-x | flash-python-a |
-| Java | flash-java-y | flash-java-x | flash-java-a |
-| C# | flash-csharp-y | flash-csharp-x | flash-csharp-a |
-| MariaDB | flash-mariadb-y | flash-mariadb-x | flash-mariadb-a |
-| Redis | (shared/internal) | flash-redis-x | flash-redis-a |
-| Nginx | flash-nginx-y | flash-nginx-x | flash-nginx-a |
-
-**DNS Hostnames (Internal Docker Networks):**
-
-| Variant | MariaDB Host | Redis Host | Python Host | Java Host | C# Host |
-|---------|--------------|------------|-------------|-----------|---------|
-| Y | mariadb | (shared) | python | java | csharp |
-| X | 10.89.0.2 | 10.89.0.3 | 10.89.0.4 | 10.89.0.5 | 10.89.0.6 |
-| A | 10.90.0.2 | 10.90.0.3 | 10.90.0.4 | 10.90.0.5 | 10.90.0.6 |
-
-**Next Available Resources (For Your Variant):**
-
-If implementing Variant B (next):
-- Network Subnet: **10.91.0.0/24** (increment pattern)
-- MariaDB Port: **3314** (host) → Container: flash-mariadb-b
-- Redis: **10.91.0.3** (internal)
-- Python Port: **30015** (host) → Container: flash-python-b
-- Java Port: **8018** (host) → Container: flash-java-b
-- C# Port: **30016** (host) → Container: flash-csharp-b
-- Nginx Port: **8447** (host) → Container: flash-nginx-b
-
-**Allocation Pattern for Future Variants:**
-- Network: `10.{90+N}.0.0/24` where N = variant index (A=0, B=1, C=2, ...)
-- MariaDB: `33{13+N}` (A=3313, B=3314, C=3315, ...)
-- Python: `300{13+2N}` (A=30013, B=30015, C=30017, ...)
-- Java: `80{17+N}` (A=8017, B=8018, C=8019, ...)
-- C#: `300{14+2N}` (A=30014, B=30016, C=30018, ...)
-- Nginx: `84{46+N}` (A=8446, B=8447, C=8448, ...)
-
-#### Step 2: Understand the SACRED Schema (MANDATORY)
-
-**Before implementing ANY variant, you MUST:**
-1. Read `versions/CONVENTIONS.md` completely
-2. Understand that Variant Y defines the database schema (immutable)
-3. Schema Source: `migrations/001_add_flash_sale_campaigns.sql`
-
-#### Step 6: Implement in All Three Languages
-
-**CRITICAL: Must implement Python, Java, AND C#**
-
-Why all three?
-- Performance comparison across language runtimes
-- Validates architecture is language-independent
-- Proves concepts work in different concurrency models
-
-**Example Directory Structure:**
-```
-/home/syracuse/flashsale/variant-{your_letter}/
-├── docker-compose.yml
-├── python-service/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── src/
-│       └── main.py  # FastAPI implementation
-├── java-service/
-│   ├── Dockerfile
-│   ├── pom.xml
-│   └── src/main/java/com/flashsale/api/
-│       ├── controller/OrderController.java
-│       └── service/YourInventoryService.java
-├── csharp-service/
-│   ├── Dockerfile
-│   ├── FlashSale.csproj
-│   └── Controllers/
-│       └── OrderController.cs
-└── nginx/
-    └── nginx.conf
-```
-
-#### Step 7: Create Verification Script
-
-**Required:** `variant-{your_letter}/verify_variant_{your_letter}.sh`
-
-**Use the provided template:**
-```bash
-cp scripts/verification/template_verify_variant.sh variant-{your_letter}/verify_variant_{your_letter}.sh
-chmod +x variant-{your_letter}/verify_variant_{your_letter}.sh
-```
-
-**Customize the template:**
-1. Open the script
-2. Update the `CONFIGURATION` section (Container names, ports)
-3. **Data Setup:** Use `python-service/setup_test_data.py` (from Variant Y) as your reference for seeding data.
-
-**CSV Output Schema (MUST MATCH SACRED):**
-```csv
-timestamp,variant,service,endpoint,test_type,threads,concurrency,
-duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,
-p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,
-total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,
-socket_errors_read,socket_errors_write,socket_errors_timeout,
-transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
-```
-
-#### Step 4: The SACRED VERIFICATION Workflow
-
-**MANDATORY Workflow (Never Skip):**
-
-```bash
-# 1. BEFORE making ANY changes
-bash scripts/verification/SACRED_VERIFICATION.sh
-# MUST PASS - establishes environmental baseline
-
-# 2. Create your variant infrastructure
-# ... implement services, docker-compose, etc.
-
-# 3. Start your variant services
-cd variant-{your_letter}
-docker-compose up -d
-
-# 4. CRITICAL: Run SACRED VERIFICATION again
-bash ../scripts/verification/SACRED_VERIFICATION.sh
-# MUST STILL PASS - proves no environmental interference
-
-# 5. Once SACRED passes, verify your variant
-bash verify_variant_{your_letter}.sh
-```
+5. **What makes implementations suboptimal (even when functionally correct)**:
+   - Poor resource allocation (Nginx bottleneck)
+   - Missing connection pooling (TCP handshake overhead)
+   - Suboptimal indexes (full table scans)
+   - Verbose logging in production configuration
 
 ---
 
-## 11. Troubleshooting & Common Mistakes
+## Environment
 
-### ❌ Mistake 1: "I modified SACRED_VERIFICATION.sh to test my variant"
-**STOP.** You are breaking the baseline.
-- `SACRED_VERIFICATION.sh` is the **Control Group** test. It must always test Variant Y.
-- **Fix:** Revert your changes. Create `variant-{letter}/verify_variant_{letter}.sh` instead.
-
-### ❌ Mistake 2: "I can't find where to start"
-**Solution:**
-1. Copy `python-service/` (Variant Y) to `variant-b/python-service/`.
-2. Copy `scripts/verification/template_verify_variant.sh` to `variant-b/verify_variant_b.sh`.
-3. Modify your new service code to implement your innovation.
-
-### ❌ Mistake 3: "My variant is slow"
-**Checklist:**
-- Are you logging to disk on every request? (Disable logging in hot path)
-- Are you using synchronous DB writes? (Consider async)
-- Did you increase thread/worker counts? (You have 24 cores!)
+- **CPU**: Intel Core Ultra 9 275HX (24 cores)
+- **RAM**: 32GB allocated to WSL2
+- **Platform**: Windows 11 + WSL2 + Docker Desktop
+- **Database**: MariaDB 10.11 (13GB InnoDB buffer pool)
 
 ---
 
-## 12. Version History & Notes
-
-### Version 2026-01-12: Variant A Record Performance
-
-**What Changed:**
-- Updated Variant A performance results
-- C# Variant A achieves **93,876 req/s** - nearly meeting 100K goal
-- Java Variant A achieves **14,950 req/s** with 3.43ms latency
-- Python Variant A achieves **12,140 req/s**
-- Nginx round-robin achieves **9,049 req/s** across 3 backends
-
-**Performance Rankings Updated:**
-1. C# Variant A - 93,876 req/s @ c=400 (NEW RECORD)
-2. Java Variant A - 14,950 req/s @ c=50
-3. Python Variant A - 12,140 req/s @ c=150
-
----
-
-## 14. Variant T (GPT-5.2-Pro) Status Note
-
-**Status:** Implementation Halted (Design Qualified)
-
-**Why Implementation Was Stopped:**
-1.  **Cost Prohibitive:** The inference cost for GPT-5.2-Pro to generate and debug the full multi-language implementation was deemed excessive for this benchmark.
-2.  **Latency:** The model's "thinking" and generation speed was too slow for an interactive debugging loop.
-3.  **Tooling Incompatibility:** Encountered friction with CRUSH CLI and VS Code plugins (e.g., Kilo Code), leading to context loss and tool call failures similar to other high-reasoning models.
-
-**Expected Performance (Theoretical):**
-*   **Ranking:** **Runner-up (2nd Place)**.
-*   **Throughput:** Estimated **~110,000 - 130,000 req/s** (Total) / **~1,000 req/s** (Valid Orders).
-*   **Architecture:** The "Redis Gate" design is superior for system stability (rejecting 99% of load in memory) but the synchronous database write for successful orders makes it slower than **Variant A** for order ingestion. It remains the "Safest" high-performance design.
-
----
-
-**Last Updated:** 2026-01-22
-**Maintained By:** Syracuse
-**Repository:** /home/syracuse/flashsale
-**Variant V Status:** ✅ PYTHON QUALIFIED (718 req/s) | ⚠️ JAVA/C# PENDING
-
-[2]: Variant V results under review per referee feedback. Exception handling bug affected 171K audit records. Fixes implemented, re-testing required.
-[3]: **SACRED VERIFICATION COMPLETE:** Python service verified at 718 req/s (c=10) with **zero failures**. Atomic counter fixes prevent oversale. Java and C# implementations exist but have not passed verification.
+**Last Updated**: 2026-01-23
+**Author**: Keith (Dawen) L — [LinkedIn](https://www.linkedin.com/in/keith-dliang02/)
+**For agent instructions**: See `README.agent-instructions.md`
