@@ -76,33 +76,38 @@ public class OrderService {
 
     /**
      * Create order with intelligent routing:
-     * - If SKU is in active flash sale campaign → Use Variant X (Redis atomic counters)
+     * - If SKU is in active flash sale campaign → Use Variant A (In-memory allocation)
      * - Otherwise → Use Variant Y (database transaction)
      * Frontend sees same API, backend handles routing transparently.
+     *
+     * OPTIMIZED: Uses CampaignMemoryAllocator.getCampaignForSku() instead of Redis lookup.
+     * This eliminates 1 Redis round-trip per request on the hot path.
      */
     public OrderResponseDto createOrder(OrderCreateDto createDto) {
         String orderNumber = String.format("ORD-%d", idGenerator.generate());
 
         // Step 1: Check if ANY SKU is in active flash sale campaign
+        // FAST PATH: Check allocator directly (zero Redis I/O)
         List<UUID> skuIds = createDto.getLineItems().stream()
                 .map(OrderLineItemCreateDto::getSkuId)
                 .collect(Collectors.toList());
 
         UUID flashSaleId = null;
-        boolean useVariantX = false;
+        boolean useVariantA = false;
 
         for (UUID skuId : skuIds) {
-            Map<String, String> meta = redisCache.getSkuMeta(skuId);
-            if (meta != null && meta.get("flash_sale_id") != null && "active".equals(meta.get("status"))) {
-                flashSaleId = UUID.fromString(meta.get("flash_sale_id"));
-                useVariantX = true;
+            // Zero Redis I/O - checks in-memory campaign registry
+            CampaignMemoryAllocator.CampaignLookupResult result = campaignAllocator.getCampaignForSku(skuId);
+            if (result.isLoaded) {
+                flashSaleId = result.campaignId;
+                useVariantA = true;
                 break;
             }
         }
 
-        if (useVariantX) {
-            // VARIANT X: Redis Atomic Counters (Flash Sale Path)
-            return createOrderVariantX(createDto, orderNumber, flashSaleId);
+        if (useVariantA) {
+            // VARIANT A: In-Memory Allocation (Flash Sale Path)
+            return createOrderVariantA(createDto, orderNumber, flashSaleId);
         } else {
             // VARIANT Y: Database Transaction (Regular Order Path)
             return createOrderVariantY(createDto, orderNumber);
@@ -190,80 +195,70 @@ public class OrderService {
     }
 
     /**
-     * Variant A v2: Producer-Consumer pattern with per-SKU AdaptiveInventoryUnit
-     * Uses CampaignMemoryAllocator with async refills and four-tier failover
-     * Flow: RAM cache → SpinWait → Direct Redis DECR → Ordinary Stock
-     * Redis Key: fs:{campaignId}:redis_pool:sku:{skuId}
-     * Used when SKU is in active flash sale campaign.
+     * Variant A: Dual-layer inventory with preallocated memory (99%+ zero network I/O)
+     *
+     * Architecture:
+     * - Layer 1: SPU counter (campaign-wide limit) - enforces total campaign limit
+     * - Layer 2: SKU caches (per-SKU inventory) - tracks individual variants
+     *
+     * Flow: Check SPU counter → decrement → check SKU cache → decrement → success
+     * If SPU depleted: async refill from Redis pool (non-blocking)
+     *
+     * Orders queue to local buffer for fire-and-forget write-back.
      *
      * CRITICAL: NOT_SUPPORTED propagation prevents DB transaction overhead for in-memory operations
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    private OrderResponseDto createOrderVariantX(OrderCreateDto createDto, String orderNumber, UUID flashSaleId) {
-        long startTime = System.nanoTime();
-
-        org.slf4j.LoggerFactory.getLogger(OrderService.class).info(
-            "[VARIANT A CORRECTED] Order {}, campaign {}",
-            orderNumber, flashSaleId
-        );
-
+    private OrderResponseDto createOrderVariantA(OrderCreateDto createDto, String orderNumber, UUID flashSaleId) {
         // Track reservation results
         List<ReservedItem> reservedItems = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
-        boolean fellBackToOrdinary = false;
 
         try {
-            // Reserve each line item using CampaignMemoryAllocator (v2)
+            // Reserve each line item using CampaignMemoryAllocator
             for (OrderLineItemCreateDto itemDto : createDto.getLineItems()) {
                 UUID skuId = itemDto.getSkuId();
                 int quantity = itemDto.getQuantity();
+                BigDecimal itemSubtotal = BigDecimal.ZERO;
 
                 // Reserve items one by one using dual-layer CampaignMemoryAllocator
                 for (int i = 0; i < quantity; i++) {
-                    // Use dual-layer allocator (SPU counter + SKU cache)
                     CampaignMemoryAllocator.ReservationResult result =
                         campaignAllocator.reserveItem(flashSaleId, skuId);
 
                     if (!result.success) {
                         switch (result.priceType) {
                             case "sold_out":
-                                org.slf4j.LoggerFactory.getLogger(OrderService.class).warn(
-                                    "SKU {} sold out in campaign {}", skuId, flashSaleId);
                                 throw new IllegalStateException("SKU " + skuId + " sold out");
                             case "not_allocated":
-                                org.slf4j.LoggerFactory.getLogger(OrderService.class).warn(
-                                    "SKU {} not allocated to this node", skuId);
                                 throw new IllegalStateException("SKU " + skuId + " not available on this server");
+                            case "not_loaded":
+                                throw new IllegalStateException("Campaign " + flashSaleId + " not loaded");
+                            case "ordinary":
+                                throw new IllegalStateException("Campaign " + flashSaleId + " sold out");
                             default:
-                                org.slf4j.LoggerFactory.getLogger(OrderService.class).error(
-                                    "Reservation failed for SKU {}: {}", skuId, result.priceType);
                                 throw new IllegalStateException("Failed to reserve SKU " + skuId);
                         }
                     }
 
-                    // Check if fell back to ordinary stock (benchmark stop indicator)
-                    if ("ordinary".equals(result.priceType)) {
-                        fellBackToOrdinary = true;
-                        org.slf4j.LoggerFactory.getLogger(OrderService.class).warn(
-                            "[BENCHMARK STOP] SKU {} using ordinary price", skuId);
-                    }
-
-                    totalAmount = totalAmount.add(result.price);
+                    itemSubtotal = itemSubtotal.add(result.price);
                 }
 
+                totalAmount = totalAmount.add(itemSubtotal);
                 reservedItems.add(new ReservedItem(
-                    skuId, quantity, reservedItems.isEmpty() ? "campaign" : "campaign",
-                    totalAmount.divide(BigDecimal.valueOf(quantity))
+                    skuId, quantity, "flash",
+                    itemSubtotal.divide(BigDecimal.valueOf(quantity), 2, java.math.RoundingMode.HALF_UP)
                 ));
             }
 
-            // Queue order for async persistence (like Python implementation)
+            // FIRE-AND-FORGET: Queue to local buffer (zero blocking)
             Map<String, Object> orderPayload = new HashMap<>();
             orderPayload.put("order_number", orderNumber);
             orderPayload.put("customer_email", createDto.getCustomerEmail());
-            orderPayload.put("customer_name", createDto.getCustomerName() != null ? createDto.getCustomerName() : "Unknown");
+            orderPayload.put("customer_name", createDto.getCustomerName() != null ? createDto.getCustomerName() : "");
             orderPayload.put("flash_sale_id", flashSaleId.toString());
-            orderPayload.put("fell_back_to_ordinary", fellBackToOrdinary);
+            orderPayload.put("total_amount", totalAmount.toString());
+            orderPayload.put("created_at", System.currentTimeMillis());
 
             List<Map<String, Object>> lineItems = new ArrayList<>();
             for (ReservedItem item : reservedItems) {
@@ -271,25 +266,15 @@ public class OrderService {
                 lineItem.put("sku_id", item.skuId.toString());
                 lineItem.put("quantity", item.quantity);
                 lineItem.put("unit_price", item.unitPrice.toString());
-                lineItem.put("price_type", item.priceType);
                 lineItems.add(lineItem);
             }
             orderPayload.put("line_items", lineItems);
-            orderPayload.put("total_amount", totalAmount.toString());
 
-            redisCache.queueOrder(orderPayload);
+            campaignAllocator.queueOrderFireAndForget(orderPayload);
 
-            long durationMs = (System.nanoTime() - startTime) / 1_000_000;
-
-            org.slf4j.LoggerFactory.getLogger(OrderService.class).info(
-                "[VARIANT A CORRECTED] Order {} reserved successfully, " +
-                "queued for persistence, duration={}ms, fell_back_to_ordinary={}",
-                orderNumber, durationMs, fellBackToOrdinary
-            );
-
-            // Build immediate response (temporary ID)
+            // Build immediate response
             OrderResponseDto response = new OrderResponseDto();
-            response.setId(UUID.randomUUID()); // Temporary ID
+            response.setId(UUID.randomUUID());
             response.setOrderNumber(orderNumber);
             response.setCustomerEmail(createDto.getCustomerEmail());
             response.setCustomerName(createDto.getCustomerName());
@@ -299,16 +284,13 @@ public class OrderService {
             response.setTotalAmount(totalAmount);
             response.setCurrency(createDto.getCurrency() != null ? createDto.getCurrency() : "USD");
             response.setStatus(OrderStatus.pending);
-            response.setNotes(null);
-            response.setFlashSaleCampaignId(fellBackToOrdinary ? null : flashSaleId);
+            response.setFlashSaleCampaignId(flashSaleId);
             response.setCreatedAt(LocalDateTime.now());
             response.setUpdatedAt(LocalDateTime.now());
 
             return response;
 
         } catch (Exception e) {
-            // Note: No easy rollback for adaptive inventory (items consumed from local cache)
-            // In production, implement compensation logic or accept small inventory variance
             throw e;
         }
     }

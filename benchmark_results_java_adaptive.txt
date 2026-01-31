@@ -1,0 +1,121 @@
+Starting Java Adaptive Benchmark
+------------------------------------------------
+Concurrency: 10
+--- /health (c=10) ---
+Running 10s test @ http://127.0.0.1:8081/health
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   191.98us  142.66us   2.67ms   91.21%
+    Req/Sec    11.16k     0.99k   12.56k    87.38%
+  448638 requests in 10.10s, 51.00MB read
+Requests/sec:  44420.42
+Transfer/sec:      5.05MB
+--- /health2 (c=10) ---
+Running 10s test @ http://127.0.0.1:8081/health2
+  4 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   197.19us  141.96us   3.12ms   90.95%
+    Req/Sec    10.84k   644.62    12.36k    67.57%
+  435417 requests in 10.10s, 49.49MB read
+Requests/sec:  43111.11
+Transfer/sec:      4.90MB
+------------------------------------------------
+Concurrency: 50
+--- /health (c=50) ---
+Running 10s test @ http://127.0.0.1:8081/health
+  4 threads and 50 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   412.75us    0.96ms  40.46ms   99.26%
+    Req/Sec    32.16k     2.76k   36.96k    72.28%
+  1292559 requests in 10.10s, 146.92MB read
+Requests/sec: 127969.99
+Transfer/sec:     14.55MB
+--- /health2 (c=50) ---
+Running 10s test @ http://127.0.0.1:8081/health2
+  4 threads and 50 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   366.03us  211.26us   6.39ms   83.94%
+    Req/Sec    33.12k     1.84k   48.55k    80.60%
+  1324712 requests in 10.10s, 150.58MB read
+Requests/sec: 131166.98
+Transfer/sec:     14.91MB
+------------------------------------------------
+Concurrency: 100
+--- /health (c=100) ---
+Running 10s test @ http://127.0.0.1:8081/health
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   569.48us  706.26us  31.04ms   96.44%
+    Req/Sec    46.30k     3.02k   68.22k    78.36%
+  1852172 requests in 10.10s, 210.53MB read
+Requests/sec: 183385.58
+Transfer/sec:     20.85MB
+--- /health2 (c=100) ---
+Running 10s test @ http://127.0.0.1:8081/health2
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   589.91us  437.70us  20.11ms   87.95%
+    Req/Sec    43.82k     4.92k   88.68k    81.80%
+  1748423 requests in 10.10s, 198.74MB read
+Requests/sec: 173122.64
+Transfer/sec:     19.68MB
+------------------------------------------------
+Concurrency: 200
+--- /health (c=200) ---
+Running 10s test @ http://127.0.0.1:8081/health
+  4 threads and 200 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.96ms    1.97ms  62.67ms   98.64%
+    Req/Sec    59.30k     5.01k   70.93k    78.25%
+  2360225 requests in 10.00s, 268.28MB read
+Requests/sec: 235974.86
+Transfer/sec:     26.82MB
+--- /health2 (c=200) ---
+Running 10s test @ http://127.0.0.1:8081/health2
+  4 threads and 200 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.89ms  575.73us  11.21ms   78.37%
+    Req/Sec    57.19k     4.66k   93.14k    75.12%
+  2287256 requests in 10.10s, 259.99MB read
+Requests/sec: 226465.65
+Transfer/sec:     25.74MB
+------------------------------------------------
+Concurrency: 300
+--- /health (c=300) ---
+Running 10s test @ http://127.0.0.1:8081/health
+  4 threads and 300 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.12ms  809.89us  44.33ms   85.26%
+    Req/Sec    68.29k     5.01k   95.12k    69.75%
+  2718482 requests in 10.03s, 309.00MB read
+Requests/sec: 270951.62
+Transfer/sec:     30.80MB
+--- /health2 (c=300) ---
+Running 10s test @ http://127.0.0.1:8081/health2
+  4 threads and 300 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.17ms    0.92ms  32.84ms   87.50%
+    Req/Sec    67.65k     6.62k   87.86k    73.50%
+  2692626 requests in 10.03s, 306.06MB read
+Requests/sec: 268353.61
+Transfer/sec:     30.50MB
+------------------------------------------------
+Concurrency: 500
+--- /health (c=500) ---
+Running 10s test @ http://127.0.0.1:8081/health
+  4 threads and 500 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.74ms    1.09ms  38.97ms   80.00%
+    Req/Sec    71.64k     5.23k   84.55k    66.50%
+  2852401 requests in 10.04s, 324.22MB read
+Requests/sec: 284185.26
+Transfer/sec:     32.30MB
+--- /health2 (c=500) ---
+Running 10s test @ http://127.0.0.1:8081/health2
+  4 threads and 500 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.09ms    2.82ms  62.88ms   94.39%
+    Req/Sec    68.77k     7.29k   82.88k    78.75%
+  2738244 requests in 10.06s, 311.25MB read
+Requests/sec: 272250.52
+Transfer/sec:     30.95MB

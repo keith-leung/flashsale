@@ -1,0 +1,12 @@
+timestamp,variant,service,endpoint,test_type,threads,concurrency,duration_s,req_per_sec,avg_latency_ms,p50_latency_ms,p90_latency_ms,p99_latency_ms,max_latency_ms,stdev_latency_ms,total_requests,total_errors,error_rate_pct,non_2xx_3xx,socket_errors_connect,socket_errors_read,socket_errors_write,socket_errors_timeout,transfer_mb,throughput_mb_s,test_sequence,throughput_increase_pct,decision
+20260128_213414,variant_a,flash-python-a,/health,health,4,10,5,18620.73,0.44614,0.392,0.589,1.06,1.06,0.59102,93103.65,0,0,0,0,0,0,0,2.47,2.47,1,0,INITIAL
+20260128_213414,variant_a,flash-python-a,/health,health,6,20,5,33596.03,0.55966,0.497,0.746,1.24,1.24,0.72193,167980.15,0,0,0,0,0,0,0,4.45,4.45,2,80.00,INITIAL
+20260128_213414,variant_a,flash-python-a,/health,health,9,40,5,42166.22,0.99,0.758,1.41,3.51,3.51,1.85,210831.10,0,0,0,0,0,0,0,5.59,5.59,3,25.00,SIGNIFICANT_GROWTH
+20260128_213414,variant_a,flash-python-a,/health,health,14,80,5,46927.41,1.83,1.37,2.39,18.69,18.69,3.18,234637.05,0,0,0,0,0,0,0,6.22,6.22,4,11.00,SIGNIFICANT_GROWTH
+20260128_213414,variant_a,flash-python-a,/health,health,21,160,5,34099.38,3.42,2.16,3.78,28.04,28.04,23.41,170496.90,0,0,0,0,0,0,0,4.52,4.52,5,-27.00,SIGNIFICANT_GROWTH
+20260128_213444,variant_a,flash-python-a,/api/v1/orders,order,4,10,5,4444.23,1.82,1.12k,,,,0.71403,22221.15,0,0,0,0,0,0,0,,,1,0,INITIAL
+20260128_213444,variant_a,flash-python-a,/api/v1/orders,order,6,20,5,5017.25,3.77,3.38,6.09,10.81,10.81,2.85,25086.25,0,0,0,0,0,0,0,0.808633,0.808633,2,12.00,INITIAL
+20260128_213444,variant_a,flash-python-a,/api/v1/orders,order,9,40,5,8201.08,4.49,3.84,6.95,11.53,11.53,2.96,41005.40,0,0,0,0,0,0,0,1.32,1.32,3,63.00,SIGNIFICANT_GROWTH
+20260128_213444,variant_a,flash-python-a,/api/v1/orders,order,14,80,5,8431.00,8.51,7.44,13.91,22.93,22.93,4.84,42155.00,0,0,0,0,0,0,0,1.36,1.36,4,2.00,SIGNIFICANT_GROWTH
+20260128_213444,variant_a,flash-python-a,/api/v1/orders,order,17,120,5,8376.37,14.39,13.46,19.61,43.64,43.64,6.14,41881.85,0,0,0,0,0,0,0,1.35,1.35,5,0,MODERATE_GROWTH
+20260128_213444,variant_a,flash-python-a,/api/v1/orders,order,17,144,5,8742.12,15.89,14.79,22.53,43.87,43.87,6.60,43710.60,0,0,0,0,0,0,0,1.41,1.41,6,4.00,MARGINAL_GROWTH

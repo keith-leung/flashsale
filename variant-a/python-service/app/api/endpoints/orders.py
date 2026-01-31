@@ -103,22 +103,39 @@ async def create_order(
 
     try:
         # Step 1: Check if ANY SKU is in active flash sale campaign
+        # FAST PATH: Check allocator directly (zero Redis I/O)
         sku_ids = [str(item.sku_id) for item in order_data.line_items]
-        sku_metadata = await redis_cache.batch_get_sku_meta(sku_ids)
 
-        # Determine if this is a flash sale order
         flash_sale_id = None
-        use_variant_x = False
+        use_variant_a = False
 
-        for sku_id in sku_ids:
-            meta = sku_metadata.get(sku_id, {})
-            if meta.get("flash_sale_id") and meta.get("status") == "active":
-                flash_sale_id = meta["flash_sale_id"]
-                use_variant_x = True
-                logger.info(f"SKU {sku_id} is in active flash sale {flash_sale_id}, using Variant X")
-                break
+        # Try in-memory allocator first (O(1) lookup, no Redis)
+        try:
+            from app.main import get_campaign_allocator
+            allocator = get_campaign_allocator()
 
-        if use_variant_x:
+            for sku_id in sku_ids:
+                campaign_id = allocator.get_campaign_for_sku(sku_id)
+                if campaign_id:
+                    flash_sale_id = campaign_id
+                    use_variant_a = True
+                    break
+        except RuntimeError:
+            # Allocator not initialized, fall back to Redis lookup
+            pass
+
+        # Only fall back to Redis if allocator doesn't have the SKU
+        sku_metadata = {}
+        if not use_variant_a:
+            sku_metadata = await redis_cache.batch_get_sku_meta(sku_ids)
+            for sku_id in sku_ids:
+                meta = sku_metadata.get(sku_id, {})
+                if meta.get("flash_sale_id") and meta.get("status") == "active":
+                    flash_sale_id = meta["flash_sale_id"]
+                    use_variant_a = True
+                    break
+
+        if use_variant_a:
             # ============================================================
             # VARIANT A FIXED: Dual-Layer Tracking (SPU + SKU)
             # ============================================================

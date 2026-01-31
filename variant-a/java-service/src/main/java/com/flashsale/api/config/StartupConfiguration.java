@@ -44,23 +44,30 @@ public class StartupConfiguration implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        logger.info("=" + "=".repeat(60));
-        logger.info("Starting Flash Sale Service - Variant A Dual-Layer");
-        logger.info("=" + "=".repeat(60));
+        // Use WARN level for critical startup logs (INFO is suppressed in production)
+        logger.warn("========== STARTUP: Flash Sale Service - Variant A Dual-Layer ==========");
 
         try {
             // Load active flash sale campaigns with valid UUIDs only
-            List<FlashSale> campaigns = flashSaleRepository.findActiveWithValidUUIDs("active").stream()
-                .filter(c -> c.isTimeActive())
+            logger.warn("STARTUP: Querying for active flash sale campaigns...");
+            List<FlashSale> allCampaigns = flashSaleRepository.findActiveWithValidUUIDs("active");
+            logger.warn("STARTUP: Query returned {} campaigns (before time filter)", allCampaigns.size());
+
+            List<FlashSale> campaigns = allCampaigns.stream()
+                .filter(c -> {
+                    boolean timeActive = c.isTimeActive();
+                    logger.warn("STARTUP: Campaign {} ({}) - isTimeActive={}, start={}, end={}",
+                        c.getId(), c.getName(), timeActive, c.getStartTime(), c.getEndTime());
+                    return timeActive;
+                })
                 .toList();
 
             if (campaigns.isEmpty()) {
-                logger.warn("⚠️  No active flash sale campaigns found");
-                logger.info("Flash Sale Service startup complete (no campaigns to load)");
+                logger.warn("STARTUP: No active flash sale campaigns found after time filter");
                 return;
             }
 
-            logger.info("Found {} active campaigns to load", campaigns.size());
+            logger.warn("STARTUP: Found {} active campaigns to load", campaigns.size());
 
             int totalLoaded = 0;
             for (FlashSale campaign : campaigns) {
@@ -72,16 +79,11 @@ public class StartupConfiguration implements ApplicationRunner {
                 }
             }
 
-            logger.info("=" + "=".repeat(60));
-            logger.info("✓ Successfully loaded {} campaigns", totalLoaded);
-            logger.info("=" + "=".repeat(60));
+            logger.warn("========== STARTUP COMPLETE: Successfully loaded {} campaigns ==========", totalLoaded);
 
         } catch (Exception e) {
-            logger.error("Failed to initialize campaign allocator", e);
-            logger.warn("Service may fall back to Redis campaign pool for requests");
+            logger.error("STARTUP ERROR: Failed to initialize campaign allocator", e);
         }
-
-        logger.info("Flash Sale Service startup complete");
     }
 
     /**
@@ -91,15 +93,17 @@ public class StartupConfiguration implements ApplicationRunner {
         UUID campaignId = campaign.getId();
         UUID spuId = campaign.getSpuId();
 
-        logger.info("Loading campaign: {} ({})", campaign.getName(), campaignId);
+        logger.warn("STARTUP: Loading campaign: {} ({})", campaign.getName(), campaignId);
 
         // Get SKUs for this campaign's SPU
         List<Sku> skus = skuRepository.findBySpuIdAndIsActive(spuId, true);
 
         if (skus.isEmpty()) {
-            logger.warn("Campaign {} has no active SKUs, skipping", campaignId);
+            logger.warn("STARTUP: Campaign {} has no active SKUs, skipping", campaignId);
             return;
         }
+
+        logger.warn("STARTUP: Campaign {} has {} SKUs", campaignId, skus.size());
 
         // Calculate Java service allocation
         int totalLimit = campaign.getTotalSaleLimit();
@@ -129,11 +133,9 @@ public class StartupConfiguration implements ApplicationRunner {
         BigDecimal flashPrice = campaign.getFlashPrice();
         BigDecimal ordinaryPrice = skus.get(0).getPrice(); // Use first SKU's price as ordinary price
 
-        // Load into campaign allocator
+        // Load into campaign allocator (matches Python's load_campaign signature)
         double refillWatermarkPct = campaign.getRefillLowerWatermarkPct() != null ?
                 campaign.getRefillLowerWatermarkPct().doubleValue() : 25.0;
-
-        int refillBatchSize = 500; // Default batch size for Producer-Consumer pattern
 
         campaignAllocator.loadCampaign(
                 campaignId,
@@ -141,12 +143,11 @@ public class StartupConfiguration implements ApplicationRunner {
                 skuAllocations,
                 flashPrice,
                 ordinaryPrice,
-                refillWatermarkPct,
-                refillBatchSize
+                refillWatermarkPct
         );
 
-        logger.info(
-                "Campaign {} loaded: java_allocation={}, items_per_sku={}, skus={}",
+        logger.warn(
+                "STARTUP: Campaign {} loaded: java_allocation={}, items_per_sku={}, skus={}",
                 campaignId, javaAllocation, itemsPerSku, skus.size()
         );
     }

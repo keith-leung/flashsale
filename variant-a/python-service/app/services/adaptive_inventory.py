@@ -36,8 +36,8 @@ class AdaptiveInventoryService:
         self._redis = redis_client
         self._lua_script_sha = lua_script_sha
 
-        # Redis key for this SKU's inventory
-        self._inventory_key = f"fs:{campaign_id}:sku:{sku_id}:limit"
+        # Redis key for this SKU's inventory (matches init_redis_pools.py format)
+        self._inventory_key = f"fs:{campaign_id}:redis_pool:sku:{sku_id}"
 
         # L1 Cache (Local Memory)
         self._local_stock = 0

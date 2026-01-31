@@ -1,6 +1,6 @@
 services:
   mariadb:
-    image: mariadb:10.11
+    image: docker.io/library/mariadb:10.11
     container_name: flash-mariadb-a
     ports:
       - "3313:3306"
@@ -15,7 +15,7 @@ services:
         ipv4_address: 10.90.0.2
 
   redis:
-    image: redis:alpine
+    image: docker.io/library/redis:alpine
     container_name: flash-redis-a
     networks:
       variant-a-net:
@@ -69,9 +69,10 @@ services:
         ipv4_address: 10.90.0.6
 
   nginx:
-    image: nginx:alpine
+    image: docker.io/library/nginx:alpine
     container_name: flash-nginx-a
     ports:
+      - "8445:80"
       - "8446:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

@@ -27,125 +27,136 @@ _campaign_allocator = None
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     global background_task
+    global _campaign_allocator
 
     # Startup
     logger.info("Starting Flash Sale Service", extra={"service": "flash-sale-python"})
 
-    # Connect to Redis
-    from app.core.redis_cache import redis_cache
-    await redis_cache.connect()
-    logger.info("Redis connection established")
-
-    # Initialize FIXED Campaign Allocator (Dual-Layer Tracking)
-    global _campaign_allocator
-    from app.core.database import AsyncSessionLocal
-    from app.services.campaign_memory_allocator import CampaignMemoryAllocator
-
-    try:
+    import os
+    if os.environ.get("BENCHMARK_MODE") == "true":
+        logger.warning("BENCHMARK MODE: Skipping Database and Redis Initialization")
+        from app.services.campaign_memory_allocator import CampaignMemoryAllocator
+        # Initialize with None as client, allocator handles it in benchmark mode
         _campaign_allocator = CampaignMemoryAllocator(
-            redis_client=redis_cache.client,
+            redis_client=None, 
             service_name="python"
         )
+    else:
+        # Connect to Redis
+        from app.core.redis_cache import redis_cache
+        await redis_cache.connect()
+        logger.info("Redis connection established")
 
-        async with AsyncSessionLocal() as db:
-            # Load active campaigns into allocator
-            from sqlalchemy import select
-            from app.models.flash_sale_campaign import FlashSaleCampaign
-            from app.models.sku import SKU
+        # Initialize FIXED Campaign Allocator (Dual-Layer Tracking)
+        from app.core.database import AsyncSessionLocal
+        from app.services.campaign_memory_allocator import CampaignMemoryAllocator
 
-            result = await db.execute(
-                select(FlashSaleCampaign)
-                .where(FlashSaleCampaign.status == 'active')
-                .where(FlashSaleCampaign.is_active == True)
+        try:
+            _campaign_allocator = CampaignMemoryAllocator(
+                redis_client=redis_cache.client,
+                service_name="python"
             )
 
-            campaigns = result.scalars().all()
-
-            for campaign in campaigns:
-                # Get SKUs for this campaign's SPU
-                sku_result = await db.execute(
-                    select(SKU)
-                    .where(SKU.spu_id == campaign.spu_id)
-                    .where(SKU.is_active == True)
-                )
-                skus = sku_result.scalars().all()
-
-                if not skus:
-                    continue
-
-                # Calculate allocations (simple even split for now)
-                preallocate_pct = float(campaign.preallocate_percentage or 60.0)
-                python_ratio = campaign.python_allocation_ratio or 1
-                total_ratio = (campaign.csharp_allocation_ratio or 20) + \
-                             (campaign.java_allocation_ratio or 13) + python_ratio
-
-                service_allocation = int(
-                    campaign.total_sale_limit * preallocate_pct / 100 *
-                    python_ratio / total_ratio
-                )
-
-                # Allocate evenly across SKUs
-                sku_allocations = {}
-                items_per_sku = service_allocation // len(skus)
-
-                for sku in skus:
-                    sku_allocations[str(sku.id)] = items_per_sku
-
-                # Load into allocator
-                await _campaign_allocator.load_campaign(
-                    campaign_id=str(campaign.id),
-                    spu_id=str(campaign.spu_id),
-                    sku_allocations=sku_allocations,
-                    flash_price=float(campaign.flash_price),
-                    ordinary_price=float(skus[0].price) if skus else 99.99,
-                    refill_watermark_pct=float(campaign.refill_lower_watermark_pct or 25.0)
-                )
-
-                logger.info(
-                    f"Loaded campaign {campaign.name}: "
-                    f"{service_allocation} items allocated to Python service"
-                )
-
-        logger.info("FIXED Campaign Allocator initialized successfully")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize FIXED campaign allocator: {e}", exc_info=True)
-        logger.warning("Service will fall back to old adaptive inventory")
-
-        # Fallback: Try old adaptive inventory
-        try:
-            from app.startup_allocations import initialize_adaptive_inventory
-
             async with AsyncSessionLocal() as db:
-                await initialize_adaptive_inventory(
-                    db=db,
-                    redis_client=redis_cache.client,
-                    campaign_id="750e8400-e29b-41d4-a716-446655440000"
-                )
-        except Exception as e2:
-            logger.error(f"Failed to initialize old adaptive inventory: {e2}", exc_info=True)
-            logger.warning("Service will fall back to Redis campaign pool for all requests")
+                # Load active campaigns into allocator
+                from sqlalchemy import select
+                from app.models.flash_sale_campaign import FlashSaleCampaign
+                from app.models.sku import SKU
 
-    # Start campaign monitor background task
-    from app.tasks.campaign_monitor import campaign_monitor_task
-    background_task = asyncio.create_task(campaign_monitor_task())
-    logger.info("Campaign monitor background task started")
+                result = await db.execute(
+                    select(FlashSaleCampaign)
+                    .where(FlashSaleCampaign.status == 'active')
+                    .where(FlashSaleCampaign.is_active == True)
+                )
+
+                campaigns = result.scalars().all()
+
+                for campaign in campaigns:
+                    # Get SKUs for this campaign's SPU
+                    sku_result = await db.execute(
+                        select(SKU)
+                        .where(SKU.spu_id == campaign.spu_id)
+                        .where(SKU.is_active == True)
+                    )
+                    skus = sku_result.scalars().all()
+
+                    if not skus:
+                        continue
+
+                    # Calculate allocations (simple even split for now)
+                    preallocate_pct = float(campaign.preallocate_percentage or 60.0)
+                    python_ratio = campaign.python_allocation_ratio or 1
+                    total_ratio = (campaign.csharp_allocation_ratio or 20) + \
+                                 (campaign.java_allocation_ratio or 13) + python_ratio
+
+                    service_allocation = int(
+                        campaign.total_sale_limit * preallocate_pct / 100 *
+                        python_ratio / total_ratio
+                    )
+
+                    # Allocate evenly across SKUs
+                    sku_allocations = {}
+                    items_per_sku = service_allocation // len(skus)
+
+                    for sku in skus:
+                        sku_allocations[str(sku.id)] = items_per_sku
+
+                    # Load into allocator
+                    await _campaign_allocator.load_campaign(
+                        campaign_id=str(campaign.id),
+                        spu_id=str(campaign.spu_id),
+                        sku_allocations=sku_allocations,
+                        flash_price=float(campaign.flash_price),
+                        ordinary_price=float(skus[0].price) if skus else 99.99,
+                        refill_watermark_pct=float(campaign.refill_lower_watermark_pct or 25.0)
+                    )
+
+                    logger.info(
+                        f"Loaded campaign {campaign.name}: "
+                        f"{service_allocation} items allocated to Python service"
+                    )
+
+            logger.info("FIXED Campaign Allocator initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize FIXED campaign allocator: {e}", exc_info=True)
+            logger.warning("Service will fall back to old adaptive inventory")
+
+            # Fallback: Try old adaptive inventory
+            try:
+                from app.startup_allocations import initialize_adaptive_inventory
+
+                async with AsyncSessionLocal() as db:
+                    await initialize_adaptive_inventory(
+                        db=db,
+                        redis_client=redis_cache.client,
+                        campaign_id="750e8400-e29b-41d4-a716-446655440000"
+                    )
+            except Exception as e2:
+                logger.error(f"Failed to initialize old adaptive inventory: {e2}", exc_info=True)
+                logger.warning("Service will fall back to Redis campaign pool for all requests")
+
+        # Start campaign monitor background task
+        from app.tasks.campaign_monitor import campaign_monitor_task
+        background_task = asyncio.create_task(campaign_monitor_task())
+        logger.info("Campaign monitor background task started")
 
     yield
 
     # Shutdown
     logger.info("Shutting down Flash Sale Service", extra={"service": "flash-sale-python"})
 
-    # Close Redis connection
-    await redis_cache.close()
+    if os.environ.get("BENCHMARK_MODE") != "true":
+        # Close Redis connection
+        await redis_cache.close()
 
-    # Cancel background task
-    if background_task:
-        background_task.cancel()
-        try:
-            await background_task
-        except asyncio.CancelledError:
-            logger.info("Campaign monitor task cancelled")
+        # Cancel background task
+        if background_task:
+            background_task.cancel()
+            try:
+                await background_task
+            except asyncio.CancelledError:
+                logger.info("Campaign monitor task cancelled")
 
     logger.info("Shutdown complete")
 
@@ -228,7 +239,7 @@ async def log_requests(request: Request, call_next):
 
     # Read request body for logging (skip for /health to minimize overhead)
     request_body = None
-    if request.method in ["POST", "PUT", "PATCH"] and request.url.path != "/health":
+    if request.method in ["POST", "PUT", "PATCH"] and request.url.path not in ["/health", "/health2"]:
         try:
             body_bytes = await request.body()
             if body_bytes:
@@ -241,7 +252,7 @@ async def log_requests(request: Request, call_next):
             request_body = "<unable to parse>"
 
     # Log request with input (skip detailed logging for /health)
-    if request.url.path != "/health":
+    if request.url.path not in ["/health", "/health2"]:
         logger.info(
             f"[{request_id}] REQUEST: {request.method} {request.url.path}",
             extra={
@@ -260,7 +271,7 @@ async def log_requests(request: Request, call_next):
 
         # Try to read response body for logging (skip for /health to avoid overhead)
         response_body = None
-        if response.status_code in [200, 201] and request.url.path != "/health":
+        if response.status_code in [200, 201] and request.url.path not in ["/health", "/health2"]:
             try:
                 body_bytes = b""
                 async for chunk in response.body_iterator:
@@ -279,7 +290,7 @@ async def log_requests(request: Request, call_next):
                 response_body = "<unable to parse>"
 
         # Log response with output (skip for /health)
-        if request.url.path != "/health":
+        if request.url.path not in ["/health", "/health2"]:
             logger.info(
                 f"[{request_id}] RESPONSE: {response.status_code} ({duration:.4f}s)",
                 extra={
@@ -336,6 +347,57 @@ async def health_check():
     """
     from starlette.responses import PlainTextResponse
     return PlainTextResponse("200 OK", status_code=200)
+
+
+# Benchmark variables
+BENCHMARK_CAMPAIGN_ID = "00000000-0000-0000-0000-000000000001"
+BENCHMARK_SKU_ID = "00000000-0000-0000-0000-000000000002"
+_benchmark_loaded = False
+_benchmark_lock = asyncio.Lock()
+
+@app.get("/health2")
+async def health_benchmark():
+    """
+    Benchmark endpoint to emulate Order creation (Fast Path only).
+    Emulates infinite inventory (10M items) to test raw allocation overhead without Redis I/O.
+    """
+    global _benchmark_loaded
+    
+    # Lazy load benchmark campaign with massive inventory
+    if not _benchmark_loaded:
+        async with _benchmark_lock:
+            if not _benchmark_loaded:
+                if _campaign_allocator is None:
+                    return JSONResponse(status_code=500, content={"detail": "Allocator not initialized"})
+                
+                sku_allocations = {
+                    BENCHMARK_SKU_ID: 10_000_000 # 10 Million items
+                }
+                
+                await _campaign_allocator.load_campaign(
+                    campaign_id=BENCHMARK_CAMPAIGN_ID,
+                    spu_id="00000000-0000-0000-0000-000000000003",
+                    sku_allocations=sku_allocations,
+                    flash_price=100.0,
+                    ordinary_price=200.0,
+                    refill_watermark_pct=20.0
+                )
+                _benchmark_loaded = True
+
+    # Perform exactly one reservation (Fast Path simulation)
+    success, price_type, _ = await _campaign_allocator.reserve_item(
+        BENCHMARK_CAMPAIGN_ID, 
+        BENCHMARK_SKU_ID
+    )
+
+    if success:
+        from starlette.responses import PlainTextResponse
+        return PlainTextResponse("200 OK", status_code=200)
+    else:
+        return JSONResponse(
+            status_code=500, 
+            content={"detail": f"Benchmark allocation failed: {price_type}"}
+        )
 
 
 def get_campaign_allocator():

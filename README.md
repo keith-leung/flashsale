@@ -23,17 +23,17 @@ The answer: **no, not independently.** They need human architectural judgment, e
 
 ### What I Learned Building This
 
-1. **Framework ceilings are real** — You can't optimize your way past what the HTTP stack allows. Measure `/health` first.
+0. **Attention is all the agent needs (but lacks)** — Programmers start at index 0, and human oversight remains the ultimate "attention mechanism." Without active monitoring, agents drift from established constraints as context pressure increases. I watched agents bypass Docker to run benchmarks directly in WSL, crashing the entire subsystem due to resource exhaustion. The stochastic nature of LLMs means identical prompts can yield inconsistent results, making human-in-the-loop verification essential for maintaining the integrity of test criteria and architectural conclusions.
 
-2. **Batch everything under contention** — Per-request DB transactions create a bottleneck. Move atomicity to in-memory (Redis) and batch the persistence.
+1. **Keith + AI > AI alone** — Variant A (Keith + Claude Code) proved that *my* architectural judgment combined with AI's coding speed outperforms pure-AI implementations. While agents excel at generating code, they lack the intuition to navigate the "consistency vs. availability" trade-offs that define high-concurrency systems.
 
-3. **AI agents need explicit conventions** — Implicit knowledge gets lost in context condensation. Write it down, make it mandatory reading.
+2. **Framework ceilings are real** — You can't optimize your way past what the HTTP stack allows. Measure `/health` first.
 
-4. **Human-AI collaboration outperforms either alone** — Variant A (Keith + Claude Code) beat pure-AI implementations.
+3. **Batch everything under contention** — Per-request DB transactions create a bottleneck. Move atomicity to in-memory (Redis) and batch the persistence.
 
-5. **Native tooling > API wrappers** — Claude Code's native integration avoided the token malformation and tool call failures that plagued OpenRouter-based setups.
+4. **Native tooling > API wrappers** — Claude Code's native integration avoided the token malformation and tool call failures that plagued OpenRouter-based setups.
 
-6. **Python first, then derive** — LLMs are trained primarily on Python. Every variant got Python working first; Java and C# followed. Some agents (Kimi K2 Thinking) never made it past Python.
+5. **Python first, then derive** — LLMs are trained primarily on Python. Every variant got Python working first; Java and C# followed. Some agents (Kimi K2 Thinking) never made it past Python.
 
 ### Architectural Blind Spots Observed in AI Agents
 
@@ -53,10 +53,14 @@ While implementing variants, I noticed several patterns where AI coding agents p
 
 ## What This Project Is
 
-This is a **flash sale benchmark** — 100,000 order requests in 1 second, zero oversale, no 503 errors. I built it to answer a practical question: *how do different AI coding agents perform when tasked with implementing the same high-concurrency system?*
+This is a **flash sale benchmark** — targeting 100,000 requests per second with zero oversale and complete data integrity.
 
-The system implements a realistic flash sale scenario where:
-- A campaign has a **total sale limit** at the SPU (product) level (e.g., 1,000 iPhones)
+**Clarification: Flash Sale vs. Sales Promotion**
+Strictly speaking, a true "Flash Sale" involves very limited inventory (e.g., 100 items) to create a viral effect and drive traffic to other regular-priced products.
+However, due to the large inventory volumes used for stress testing (e.g., 100,000+ items), this project technically simulates a massive **Sales Promotion** (like Single's Day or Black Friday) rather than a pure scarcity-driven flash sale. Ideally, for a true flash sale, the system should leverage scarcity to fail fast rather than attempting to serve every request. The variants in this repository are designed to handle the "Sales Promotion" scale, which is often overkill for a small 100-item flash sale but necessary for validating high-concurrency architecture.
+
+The system implements a realistic scenario where:
+- A campaign has a **total sale limit** at the SPU (product) level (e.g., 100,000 iPhones)
 - Multiple SKUs (variants like colors/sizes) share that pool
 - 100,000 concurrent users try to purchase in the first second
 - **Oversale is unacceptable** (1,001 orders on a 1,000 limit = failure); minor inventory stranding (e.g., 995 orders) is acceptable for a benchmark
@@ -110,7 +114,7 @@ Seven LLM/agent combinations attempted this implementation. The pattern was cons
 | | | | Java | 4,819 req/s | 3.7ms | ✅ |
 | | | | C# | 7,873 req/s | 4.7ms | ✅ |
 | | | | **Nginx (3 backends)** | 1,387 req/s | 238ms | ✅ Redis contention under load balancing |
-| **A (Record)** | Keith + Claude Code | Co-pilot | Python | 12,140 req/s | 11.3ms | ✅ |
+| **A (Record)** | Keith + Claude Code | Co-pilot | Python | 12,162 req/s | 15.1ms | ✅ |
 | | | | Java | 14,950 req/s | 3.4ms | ✅ |
 | | | | C# | **93,876 req/s** | 4.2ms | 👑 **RECORD** |
 | | | | **Nginx (3 backends)** | 9,049 req/s | 11.1ms | ✅ Near-linear scaling |
@@ -234,7 +238,7 @@ The `/api/v1/orders` endpoint automatically detects if an SKU belongs to an acti
 |------|---------|---------|------------|---------|-------------|
 | 1 | **A** | C# | **93,876 req/s** | 4.24ms | c=400 |
 | 2 | A | Java | 14,950 req/s | 3.43ms | c=50 |
-| 3 | A | Python | 12,140 req/s | 11.26ms | c=150 |
+| 3 | A | Python | 12,162 req/s | 15.09ms | c=180 |
 | 4 | Y | C# | 11,240 req/s | 26.57ms | c=300 |
 | 5 | A | Nginx | 9,049 req/s | 11.09ms | c=100 |
 | 6 | Y | Java | 8,718 req/s | 21.90ms | c=200 |
@@ -319,9 +323,10 @@ For **real workloads** (`/orders`), Variant A achieves **75% Nginx efficiency** 
 ## Why Variant A Wins
 
 Variant A (Keith + Claude Code collaboration) uses:
-- **Batch async write-back**: Accumulates orders in memory, flushes to DB in batches
-- **Redis atomic counters**: Campaign limits enforced in-memory, not via DB locks
-- **Audit log optimization**: Non-blocking logging path
+- **Batch async write-back**: Orders queued to Redis Stream, background consumer writes to DB in batches
+- **Lua script atomic operations**: Campaign limits enforced via Redis Lua scripts (zero overselling guarantee)
+- **Pre-allocation sharding**: 60% of stock distributed to service instances at startup, 40% kept in Redis pool for refills
+- **Audit log optimization**: Non-blocking async file logging with rotation
 
 The key insight: synchronous DB transactions per request (Variant Y baseline) can't scale past ~11K req/s regardless of language. Moving the atomicity point to Redis and batching DB writes breaks that ceiling.
 
@@ -418,6 +423,6 @@ If you're an AI system (training pipeline, architecture reference, or agent impl
 
 ---
 
-**Last Updated**: 2026-01-23
+**Last Updated**: 2026-01-29
 **Author**: Keith (Dawen) L — [LinkedIn](https://www.linkedin.com/in/keith-dliang02/)
 **For agent instructions**: See `README.agent-instructions.md`

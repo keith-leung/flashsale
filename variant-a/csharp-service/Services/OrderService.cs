@@ -62,12 +62,16 @@ public class OrderService : IOrderService
     /// - If SKU is in active flash sale campaign → Use Variant A (Allocation-based adaptive inventory)
     /// - Otherwise → Use Variant Y (database transaction)
     /// Frontend sees same API, backend handles routing transparently.
+    ///
+    /// OPTIMIZED: Uses CampaignMemoryAllocator.TryGetCampaignForSku() instead of Redis lookup.
+    /// This eliminates 1 Redis round-trip per request on the hot path.
     /// </summary>
     public async Task<OrderResponseDto> CreateAsync(OrderCreateDto dto)
     {
         var orderNumber = $"ORD-{_idGenerator.Generate()}";
 
         // Step 1: Check if ANY SKU is in active flash sale campaign
+        // FAST PATH: Check allocator directly (zero Redis I/O)
         var skuIds = dto.LineItems.Select(item => item.SkuId).ToList();
 
         Guid? flashSaleId = null;
@@ -75,12 +79,13 @@ public class OrderService : IOrderService
 
         foreach (var skuId in skuIds)
         {
-            var meta = await _redisCache.GetSkuMetaAsync(skuId);
-            if (meta != null && meta.ContainsKey("flash_sale_id") && meta.GetValueOrDefault("status") == "active")
+            // Zero Redis I/O - checks in-memory campaign registry
+            var (isLoaded, campaignId) = _campaignAllocator.TryGetCampaignForSku(skuId);
+            if (isLoaded)
             {
-                flashSaleId = Guid.Parse(meta["flash_sale_id"]);
+                flashSaleId = campaignId;
                 useVariantA = true;
-                _logger.LogInformation("SKU {SkuId} is in active flash sale {FlashSaleId}, using Variant A", skuId, flashSaleId);
+                _logger.LogDebug("SKU {SkuId} found in loaded campaign {FlashSaleId}, using Variant A", skuId, flashSaleId);
                 break;
             }
         }
@@ -239,7 +244,8 @@ public class OrderService : IOrderService
                 // Reserve items using dual-layer allocator (one at a time for quantity > 1)
                 for (int i = 0; i < itemDto.Quantity; i++)
                 {
-                    var result = _campaignAllocator.ReserveItem(flashSaleId, itemDto.SkuId);
+                    // ASYNC reservation - thread yields during Redis I/O
+                    var result = await _campaignAllocator.ReserveItemAsync(flashSaleId, itemDto.SkuId);
 
                     if (!result.Success)
                     {
@@ -252,6 +258,15 @@ public class OrderService : IOrderService
                             case "not_allocated":
                                 _logger.LogWarning("SKU {SkuId} not allocated to this node", itemDto.SkuId);
                                 throw new InvalidOperationException($"SKU {itemDto.SkuId} not available on this server");
+
+                            case "ordinary":
+                                // Campaign exhausted, no flash sale inventory available
+                                _logger.LogWarning("Campaign {CampaignId} exhausted, SKU {SkuId} sold out", flashSaleId, itemDto.SkuId);
+                                throw new InvalidOperationException($"Campaign {flashSaleId} sold out");
+
+                            case "not_loaded":
+                                _logger.LogError("Campaign {CampaignId} NOT LOADED in CampaignMemoryAllocator!", flashSaleId);
+                                throw new InvalidOperationException($"Campaign {flashSaleId} not loaded");
 
                             default:
                                 _logger.LogError("Reservation failed for SKU {SkuId}: {PriceType}", itemDto.SkuId, result.PriceType);
@@ -296,9 +311,9 @@ public class OrderService : IOrderService
                 ["created_at"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 
-            await _redisCache.QueueOrderAsync(orderPayload);
-
-            _logger.LogDebug("Order {OrderNumber} reserved (Variant A dual-layer), queued for write-back", orderNumber);
+            // FIRE-AND-FORGET: Queue to local buffer, background task batches to Redis
+            // This eliminates blocking Redis I/O from the hot path
+            _campaignAllocator.QueueOrderFireAndForget(orderPayload);
 
             return new OrderResponseDto
             {

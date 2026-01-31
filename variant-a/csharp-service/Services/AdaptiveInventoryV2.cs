@@ -27,7 +27,7 @@ public class AdaptiveInventoryV2
 
     // Redis client
     private readonly IDatabase _redis;
-    private readonly string _skuPoolKey;  // fs:{campaignId}:redis_pool:sku:{skuId}
+    private readonly string _campaignPoolKey;  // fs:{campaignId}:redis_pool:sku:{skuId}
 
     // Local stock management (Producer-Consumer)
     private int _localStock;
@@ -127,7 +127,7 @@ public class AdaptiveInventoryV2
     private async Task<(bool Success, string PriceType, decimal Price)> HandleDepletedAsync()
     {
         // Try campaign pool directly (bypassing local cache)
-        long remaining = await _redis.StringDecrementAsync(_skuPoolKey);
+        long remaining = await _redis.StringDecrementAsync(_campaignPoolKey);
         if (remaining >= 0)
         {
             Interlocked.Increment(ref _campaignPoolHits);
@@ -140,7 +140,7 @@ public class AdaptiveInventoryV2
         else
         {
             // Campaign sold out → restore Redis counter and try ordinary stock
-            await _redis.StringIncrementAsync(_skuPoolKey);
+            await _redis.StringIncrementAsync(_campaignPoolKey);
 
             // TODO: Check ordinary stock from database (inventory table)
             // For now, return sold out
@@ -160,7 +160,7 @@ public class AdaptiveInventoryV2
             var startTime = DateTime.UtcNow;
 
             // Try to pull refill_batch_size items from campaign pool
-            long newRemaining = await _redis.StringDecrementAsync(_skuPoolKey, _refillBatchSize);
+            long newRemaining = await _redis.StringDecrementAsync(_campaignPoolKey, _refillBatchSize);
 
             if (newRemaining >= 0)
             {
@@ -191,7 +191,7 @@ public class AdaptiveInventoryV2
             else
             {
                 // Campaign pool depleted → restore what we tried to take
-                await _redis.StringIncrementAsync(_skuPoolKey, _refillBatchSize);
+                await _redis.StringIncrementAsync(_campaignPoolKey, _refillBatchSize);
 
                 _logger.LogInformation(
                     "[Allocation {AllocationId}] Refill FAILED: Campaign pool depleted, remaining={CampaignRemaining}",

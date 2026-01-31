@@ -109,7 +109,7 @@ async def create_order_variant_a_fixed(
 
             reserved_items.append((sku_id, quantity, price_type, price))
 
-        # Queue order for async persistence
+        # FIRE-AND-FORGET: Queue to local buffer (zero blocking)
         order_payload = {
             "order_number": order_number,
             "customer_email": customer_email,
@@ -120,15 +120,14 @@ async def create_order_variant_a_fixed(
                     "sku_id": sku_id,
                     "quantity": quantity,
                     "unit_price": str(unit_price),
-                    "price_type": price_type
                 }
                 for sku_id, quantity, price_type, unit_price in reserved_items
             ],
             "total_amount": str(total_amount),
-            "used_ordinary_price": used_ordinary_price
+            "created_at": int(time.time() * 1000)
         }
 
-        await redis_cache.queue_order(order_payload)
+        await allocator.queue_order_fire_and_forget(order_payload)
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 

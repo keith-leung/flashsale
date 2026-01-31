@@ -1,0 +1,13 @@
+concurrency,threads,duration,total_requests,rps,avg_latency_ms,p99_latency,errors,pool_consumed
+20,2,5s,41838,8204.50,2.85ms,22.35ms,none,20000
+40,2,5s,49178,9643.56,4.66ms,15.10ms,  Non-2xx or 3xx responses: 23310,20000
+60,4,5s,50975,9994.71,6.13ms,17.48ms,  Non-2xx or 3xx responses: 50975,0
+80,4,5s,50987,10125.96,8.28ms,26.12ms,  Non-2xx or 3xx responses: 50987,0
+100,4,5s,50344,9987.00,10.52ms,31.34ms,  Non-2xx or 3xx responses: 50344,0
+120,4,5s,51720,10302.68,11.87ms,31.27ms,  Non-2xx or 3xx responses: 51720,0
+140,4,5s,50288,9946.62,14.66ms,52.74ms,  Non-2xx or 3xx responses: 50288,0
+160,4,5s,50702,10016.17,16.02ms,43.21ms,  Non-2xx or 3xx responses: 50702,0
+180,8,5s,53551,10500.64,16.77ms,42.84ms,  Non-2xx or 3xx responses: 53551,0
+200,8,5s,50847,10026.63,19.92ms,48.45ms,  Non-2xx or 3xx responses: 50847,0
+250,8,5s,50956,10069.97,24.42ms,49.81ms,  Non-2xx or 3xx responses: 50956,0
+300,8,5s,48606,9531.57,30.84ms,77.58ms,  Non-2xx or 3xx responses: 48606,0

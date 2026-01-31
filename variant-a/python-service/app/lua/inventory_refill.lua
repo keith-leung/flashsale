@@ -1,7 +1,7 @@
 -- Adaptive Inventory Refill Script for Flash Sale
 -- This Lua script runs atomically in Redis to manage inventory batching
 --
--- KEYS[1]: inventory key (e.g., "fs:{campaign_id}:sku:{sku_id}:limit")
+-- KEYS[1]: inventory key (e.g., "fs:{campaign_id}:redis_pool:sku:{sku_id}")
 -- ARGV[1]: requested batch size (e.g., 500)
 -- ARGV[2]: low water mark threshold (e.g., 2000)
 --

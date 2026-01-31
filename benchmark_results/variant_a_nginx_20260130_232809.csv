@@ -1,0 +1,9 @@
+timestamp,scenario,service,concurrency,threads,duration,total_requests,rps,latency_avg_ms,latency_max_ms,errors,error_rate
+2026-01-30T23:28:10.833072,real_campaign,nginx,10,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:12.440095,real_campaign,nginx,25,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:14.064975,real_campaign,nginx,50,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:15.680167,real_campaign,nginx,100,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:17.316849,real_campaign,nginx,150,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:18.952302,real_campaign,nginx,200,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:20.564682,real_campaign,nginx,300,8,10,0,0.0,0.0,0.0,0,0
+2026-01-30T23:28:22.181520,real_campaign,nginx,400,8,10,0,0.0,0.0,0.0,0,0
