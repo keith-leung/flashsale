@@ -370,9 +370,31 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 | V       | /orders | C#      | -           | -         | ⚠️ **NOT ACCREDITED** (Build Issues) |
 | V       | /orders | Nginx   | -           | -         | ⏹️ Not tested     |
 
-[2]: Variant V exception handling bug fixed. Python verified. Java/C# claims retracted pending fix of runtime/build blockers.
 [3]: **SACRED VERIFICATION COMPLETE:** Python service verified at 718 req/s (c=10) with **zero failures**. Atomic counter fixes prevent oversale. Java and C# implementations exist but have not passed verification.
 
+---
+
+## 15. The Redis Paradox: Why Variant X is Slower than Variant Y
+
+Benchmark results in this repository reveal a counter-intuitive fact: **Variant X (Naive Redis) is often slower than Variant Y (Standard DB).** This is a deliberate "sound" result that provides a critical lesson in distributed system architecture:
+
+### 1. Latency Stacking (The "Network Hop" Penalty)
+- **Variant Y (DB Only):** `App → DB (Transaction) → App`. Cost: 1 Network RTT + DB Lock.
+- **Variant X (Naive Redis):** `App → Redis (Check/Decr) → App → DB (Create Order) → App`. Cost: **2 Network RTTs** (Redis + DB) + extra serialization overhead.
+- **The Result:** If the DB write remains synchronous, adding Redis as a "pre-check" simply doubles the network chatter per request.
+
+### 2. Connection Pool Contention
+Variant X requires managing **two** connection pools (Redis + DB). Under extreme concurrency, threads often block waiting for a Redis connection, only to then block waiting for a DB connection. This "double waiting" reduces overall throughput compared to a single, well-tuned database connection pool.
+
+### 3. Distributed Lock Bottlenecks
+Variant Y uses highly optimized **Row-Level Locks** inside MariaDB. Variant X uses Redis atomic counters, which are fast but force all instances to compete for a single network endpoint. The network packet overhead of 100,000 commands/sec across multiple services can create more contention than internal DB scheduling.
+
+### 4. The "Variant A" Solution
+Variant A only breaks the performance barrier because it **eliminates I/O from the hot path entirely**:
+- It uses **Local Service RAM** for the initial decrement (Zero Latency).
+- It uses **Async Write-back** (via Redis Streams) to remove the Database write from the user's request path.
+
+**Crucial Insight for Agents:** Adding a cache (Redis) only improves performance if it **replaces** a slower operation on the hot path. If used as an *additional* check before a slow operation, it will always degrade performance.
 
 ### ❌ Variant Z & Zeta - DISQUALIFIED
 
