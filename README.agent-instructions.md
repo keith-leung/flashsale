@@ -358,9 +358,9 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 | X       | /orders | Java    | c=20        | 3.73ms    | 4,819 req/s     |
 | X       | /orders | C#      | c=40        | 4.67ms    | 7,873 req/s     |
 | X       | /orders | Nginx   | c=200       | 238.75ms  | 1,387 req/s     |
-| A       | /orders | Python  | c=180       | 15.09ms   | 12,162 req/s    |
-| A       | /orders | Java    | c=50        | 3.43ms    | 14,950 req/s    |
-| A       | /orders | C#      | c=400       | 4.24ms    | **93,876 req/s** 👑 |
+| A       | /orders | Python  | c=150       | 11.79ms   | 13,133 req/s    |
+| A       | /orders | Java    | c=100       | 9.27ms    | 75,178 req/s    |
+| A       | /orders | C#      | c=300       | 3.90ms    | **127,638 req/s** 👑 |
 | A       | /orders | Nginx   | c=100       | 11.09ms   | 9,049 req/s     |
 | Z       | /orders | Python  | c=10        | 15.91ms   | 502 req/s ❌    |
 | Z       | /orders | Java    | -           | -         | ❌ DISQUALIFIED |
@@ -387,9 +387,9 @@ Your new variant (e.g., Variant B) **MUST** use the same API and Schema as Varia
 ### Performance Rankings
 
 **Flash Sale Orders (Production Workload):**
-1. **C# Variant A - 93,876 req/s** @ c=400 👑
-2. Java Variant A - 14,950 req/s @ c=50
-3. Python Variant A - 12,162 req/s @ c=180
+1. **C# Variant A - 127,638 req/s** @ c=300 👑
+2. Java Variant A - 75,178 req/s @ c=100
+3. Python Variant A - 13,133 req/s @ c=150
 4. C# Variant Y - 11,240 req/s @ c=300
 5. Nginx Variant A - 9,049 req/s @ c=100
 6. Java Variant Y - 8,718 req/s @ c=200
@@ -856,6 +856,44 @@ bash verify_variant_{your_letter}.sh
 
 ## 12. Version History & Notes
 
+### Version 2026-01-31: Variant A Complete Benchmark - Small Business & Big Business
+
+**What Changed:**
+- **Critical Bug Fix**: Previous benchmarks used incorrect campaign/SKU IDs, causing services to fall back to slow Variant Y (database) path
+- Re-ran all benchmarks with correct SKU IDs
+- Tested BOTH Small Business (100% RAM) and Big Business (20% RAM + refill) scenarios
+- Validated refill mechanism behavior under different load conditions
+
+**Small Business Results (100% RAM - True Flash Sale):**
+| Service | /health2 Peak | Orders Peak | Ratio |
+|---------|---------------|-------------|-------|
+| C# | 303,749 RPS | 127,638 RPS | 42.0% |
+| Java | 255,020 RPS | 75,689 RPS | 29.7% |
+| Python | 55,932 RPS | 13,656 RPS | 24.4% |
+
+**Big Business Results (20% RAM + Refill - Sales Promotion):**
+| Service | /health2 Peak | Orders Peak | Ratio | Notes |
+|---------|---------------|-------------|-------|-------|
+| Java | 255,020 RPS | 25,000 RPS | 9.8% | Direct Redis fallback + 100K batch size |
+| Python | 55,932 RPS | 780 RPS | 1.4% | Coalescing fix (wait for batch refill) |
+
+**Key Insights**:
+1. **Small Business (Flash Sale)**: 21-42% of /health2 — gap is JSON/BigDecimal overhead, NOT network I/O
+2. **Big Business (Promotion)**: Java achieves 25K RPS with direct Redis fallback when local cache depletes
+3. **Python Big Business**: Fundamentally limited by GIL and single-threaded event loop
+   - With 9 uvicorn workers: 780 RPS (best result with coalescing fix)
+   - With 1 uvicorn worker: 209 RPS (single event loop saturates faster)
+   - Root cause: Event loop saturates waking coroutines + parsing Redis responses
+4. **Fixes Attempted**:
+   - Higher watermark (70%): No improvement — refill still happens during high load
+   - Proactive background refill: No improvement — refill operations compete for event loop
+   - Direct Redis fallback: Counterproductive (676 RPS) — per-request Redis saturates loop
+   - **Coalescing (Gemini's fix)**: +17% improvement (666→780 RPS) — requests wait for ONE batch refill
+5. **Recommendation**:
+   - **Python**: Use Small Business mode (13.6K RPS). Big Business limited to ~780 RPS.
+   - **Java**: 25K RPS with direct Redis fallback + 100K batch size
+   - **C#**: 127K RPS — multi-threaded TPL handles Redis I/O across cores
+
 ### Version 2026-01-29: Variant A Python Lua Scripts & Protection Mechanisms
 
 **What Changed:**
@@ -902,9 +940,10 @@ bash verify_variant_{your_letter}.sh
 
 ---
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-01-31
 **Maintained By:** Syracuse
 **Repository:** /home/syracuse/flashsale
+**Variant A Status:** ✅ C# 127,638 RPS | ✅ Java 75,178 RPS | ✅ Python 13,133 RPS
 **Variant V Status:** ✅ PYTHON QUALIFIED (718 req/s) | ⚠️ JAVA/C# PENDING
 
 [2]: Variant V results under review per referee feedback. Exception handling bug affected 171K audit records. Fixes implemented, re-testing required.

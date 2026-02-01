@@ -82,7 +82,10 @@ public class OrderService {
      *
      * OPTIMIZED: Uses CampaignMemoryAllocator.getCampaignForSku() instead of Redis lookup.
      * This eliminates 1 Redis round-trip per request on the hot path.
+     *
+     * CRITICAL: NOT_SUPPORTED propagation for Variant A - no DB transaction overhead
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OrderResponseDto createOrder(OrderCreateDto createDto) {
         String orderNumber = String.format("ORD-%d", idGenerator.generate());
 

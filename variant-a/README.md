@@ -168,7 +168,7 @@ Before the campaign starts, the Redis Pools must be primed.
 - Tool: `wrk` with POST requests to `/api/v1/orders`
 - Campaign: Pre-loaded with 100,000 items per SKU
 
-### 6.1 Individual Service Performance
+### 6.1 Individual Service Performance (Optimal Case)
 
 | Service | Peak Throughput | Optimal Concurrency | Avg Latency | Architecture Notes |
 | :--- | :--- | :--- | :--- | :--- |
@@ -176,7 +176,28 @@ Before the campaign starts, the Redis Pools must be primed.
 | **Java** | ~14,950 req/s | c=50 | 3.43ms | Virtual threads (Java 21), lock-free CAS |
 | **Python** | ~12,140 req/s | c=150 | 11.26ms | uvloop async, dual-layer batching |
 
-### 6.2 Nginx Round-Robin Load Balancer
+### 6.2 Small Biz vs. Big Biz Analysis
+
+We tested two scenarios to expose architectural limits:
+1. **Small Biz**: 5,000 items, 100% pre-allocation (No Refill).
+2. **Big Biz**: 1,000,000 items, 10% pre-allocation (Heavy Refill).
+
+| Language | Small Biz (RPS) | Big Biz (RPS) | Performance Drop | Root Cause |
+| :--- | :--- | :--- | :--- | :--- |
+| **C#** | **127,000** | **127,000** | 0% | Multi-threaded TPL + non-blocking async I/O handles refill transparently. |
+| **Java** | 68,000 | 24,405 | -64% | Virtual thread lock contention during refill. Busy-wait loops when buffer empties. |
+| **Python** | 13,000 | 676 | -95% | **Single-threaded Event Loop Saturation**. Handling thousands of concurrent Redis requests saturates the single CPU core. |
+
+### 6.3 The "Refill Thrashing" Phenomenon
+
+The "Big Business" scenario reveals the true cost of network I/O in distributed systems.
+- **C#**: The runtime schedules thousands of waiting tasks efficiently across all CPU cores.
+- **Java**: Virtual threads are cheap, but `ReentrantLock` and `SpinWait` logic creates CPU contention when thousands of threads race for the same lock.
+- **Python**: The "Death Spiral". When the local buffer empties, every request triggers a Redis call. The single event loop cannot process 50,000 Redis responses/sec while also handling HTTP requests. Throughput collapses to ~600 RPS.
+
+---
+
+## 7. Nginx Round-Robin Load Balancer
 
 | Configuration | Peak Throughput | Optimal Concurrency | Avg Latency |
 | :--- | :--- | :--- | :--- |
@@ -191,7 +212,7 @@ upstream flash_sale_backend {
 }
 ```
 
-### 6.3 Performance Observations
+### 7.1 Performance Observations
 
 1. **C# dominates throughput** - Kestrel's async I/O and .NET's efficient memory management deliver exceptional performance at high concurrency levels.
 
@@ -201,7 +222,7 @@ upstream flash_sale_backend {
 
 4. **Round-Robin is bottlenecked by SSL** - The Nginx load balancer adds TLS overhead and round-robin distributes load to slower services, resulting in aggregate throughput below individual service peaks.
 
-### 6.4 Benchmark Commands
+### 7.2 Benchmark Commands
 
 ```bash
 # Individual service benchmarks

@@ -81,6 +81,14 @@ services:
       variant-a-net:
         ipv4_address: 10.90.0.7
 
+  benchmark:
+    image: docker.io/williamyeh/wrk
+    container_name: flash-benchmark-a
+    networks:
+      variant-a-net:
+        ipv4_address: 10.90.0.10
+    entrypoint: ["tail", "-f", "/dev/null"]
+
 networks:
   variant-a-net:
     driver: bridge
